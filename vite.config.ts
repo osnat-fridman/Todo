@@ -9,7 +9,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: "unit",
-          include: ["src/**/*.test.{ts,tsx}", "api/**/*.test.ts", "server/**/*.test.ts"],
+          include: ["src/**/*.test.{ts,tsx}", "api/**/*.test.ts", "server/**/*.test.ts", "shared/**/*.test.ts"],
           exclude: ["**/*.integration.test.ts", "node_modules/**"],
           environment: "jsdom",
           setupFiles: ["./src/test-setup.ts"],

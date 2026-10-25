@@ -26,6 +26,44 @@ export function allowMethods(req: VercelRequest, res: VercelResponse, methods: s
   return false;
 }
 
+const MAX_BODY_BYTES = 16 * 1024;
+
+/**
+ * Returns the parsed JSON object body, or answers 400 and returns null when the request
+ * is not JSON, is larger than the limit, or is not a JSON object.
+ */
+export function readJsonBody(
+  req: VercelRequest,
+  res: VercelResponse,
+  maxBytes: number = MAX_BODY_BYTES,
+): Record<string, unknown> | null {
+  const contentType = String(req.headers?.["content-type"] ?? "");
+  if (!contentType.toLowerCase().startsWith("application/json")) {
+    sendError(res, 400, "INVALID_REQUEST", "הבקשה חייבת להיות בפורמט JSON.");
+    return null;
+  }
+
+  const declaredLength = Number(req.headers?.["content-length"] ?? 0);
+  let body: unknown;
+  try {
+    body = req.body;
+  } catch {
+    // @vercel/node parses lazily and throws on malformed JSON.
+    body = undefined;
+  }
+  const actualLength = body === undefined ? 0 : Buffer.byteLength(JSON.stringify(body));
+  if (declaredLength > maxBytes || actualLength > maxBytes) {
+    sendError(res, 400, "INVALID_REQUEST", "הבקשה גדולה מדי.");
+    return null;
+  }
+
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    sendError(res, 400, "INVALID_REQUEST", "הבקשה אינה תקינה.");
+    return null;
+  }
+  return body as Record<string, unknown>;
+}
+
 /** Answers a failed database operation with a temporary-failure error. */
 export function sendDatabaseError(res: VercelResponse, context: string, error: unknown): void {
   logDatabaseError(context, error);

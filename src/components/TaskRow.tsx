@@ -15,7 +15,7 @@ export default function TaskRow({ task, selected, onSelect }: Props) {
     .join(" ");
 
   return (
-    <li className={classes} data-testid="task-row">
+    <li className={classes} data-testid="task-row" data-task-id={task.id}>
       <button
         type="button"
         className="task-row-select"

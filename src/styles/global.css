@@ -67,7 +67,9 @@ p {
 }
 
 .nav-link:focus-visible,
-.task-row-select:focus-visible {
+.task-row-select:focus-visible,
+.button:focus-visible,
+.icon-button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
 }
@@ -107,6 +109,79 @@ p {
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border);
   font: var(--font-h3);
+}
+
+/* ---------- Buttons ---------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  font: var(--font-body-large);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--color-primary-dark);
+  color: #fff;
+}
+
+.button-primary:hover:not(:disabled) {
+  background: var(--color-primary-dark-hover);
+}
+
+.button-secondary {
+  background: var(--color-surface);
+  border-color: var(--color-primary-dark);
+  color: var(--color-primary-dark);
+}
+
+.button-secondary:hover:not(:disabled) {
+  background: var(--color-background);
+}
+
+.button:disabled {
+  background: var(--color-input-background);
+  border-color: var(--color-border);
+  color: var(--color-text-secondary);
+  cursor: not-allowed;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-primary);
+  cursor: pointer;
+}
+
+.icon-button:hover:not(:disabled) {
+  background: var(--color-background);
+}
+
+.add-task {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.add-task-full {
+  max-width: 320px;
+  color: var(--color-text-secondary);
+  font: var(--font-body-medium);
 }
 
 /* ---------- Task list ---------- */
@@ -200,6 +275,12 @@ p {
 
 /* ---------- Task details ---------- */
 
+/* Stays in view while a long list scrolls, so a selected task and its details are visible together. */
+.task-details-card {
+  position: sticky;
+  top: var(--space-2);
+}
+
 .details-empty {
   padding: var(--space-4) var(--space-3);
   color: var(--color-text-secondary);
@@ -246,6 +327,79 @@ p {
   resize: vertical;
 }
 
+.input.is-invalid {
+  border-color: var(--color-error);
+}
+
+.input:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 0;
+}
+
+.input.is-invalid:focus-visible {
+  outline-color: var(--color-error);
+}
+
+.field-error {
+  color: var(--color-error-dark);
+  font: var(--font-body-medium);
+}
+
+/* ---------- Modal ---------- */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-2);
+  background: rgba(31, 41, 55, 0.5);
+}
+
+.modal {
+  width: 100%;
+  max-width: 480px;
+  max-height: 100%;
+  overflow-y: auto;
+  background: var(--color-surface);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-3) 0;
+}
+
+.modal-title {
+  font: var(--font-h3);
+}
+
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) var(--space-3);
+}
+
+.form-error {
+  margin: 0;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.modal-actions .button {
+  flex: 1;
+}
+
 /* ---------- About ---------- */
 
 .about-card {
@@ -275,6 +429,33 @@ p {
   .workspace {
     grid-template-columns: minmax(0, 1fr);
     gap: var(--space-2);
+  }
+
+  .page-heading {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .add-task {
+    flex-direction: column-reverse;
+    align-items: stretch;
+    gap: var(--space-1);
+  }
+
+  .add-task-full {
+    max-width: none;
+  }
+
+  .task-details-card {
+    position: static;
+  }
+
+  .modal-header {
+    padding: var(--space-2) var(--space-2) 0;
+  }
+
+  .modal-form {
+    padding: var(--space-2);
   }
 
   .card-title {
