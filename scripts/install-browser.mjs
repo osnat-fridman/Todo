@@ -7,6 +7,12 @@ if (process.env.SKIP_BROWSER_INSTALL) {
   process.exit(0);
 }
 
+// Vercel sets VERCEL during its build; the deployed site never runs Playwright (ADR-14).
+if (process.env.VERCEL) {
+  console.log("Skipping Playwright browser install (Vercel build).");
+  process.exit(0);
+}
+
 const result = spawnSync("npx", ["playwright", "install", "chromium", "webkit"], {
   stdio: "inherit",
   env: { ...process.env, PLAYWRIGHT_BROWSERS_PATH: "0" },

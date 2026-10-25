@@ -3,6 +3,7 @@
   "framework": "vite",
   "devCommand": "vite --port $PORT",
   "outputDirectory": "dist",
+  "regions": ["fra1"],
   "rewrites": [{ "source": "/about", "destination": "/index.html" }],
   "functions": {
     "api/**/*.ts": { "includeFiles": "certs/**" }

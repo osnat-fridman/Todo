@@ -327,3 +327,11 @@ Chrome Desktop / Chrome Android (PWA) / Safari iPhone (PWA)
 - ה-SPA fallback ב-`vercel.json` הוא Rewrite מפורש של `/about` ל-`/index.html`, כפי שמוגדר בסעיף 2.9. נתיבי `/api/*`, קבצים סטטיים וקובצי Vite אינם מושפעים.
 
 **השלכות:** נתיב לא מוכר שנפתח ישירות בדפדפן מקבל 404 של Vercel (בתוך האתר, ניווט לנתיב לא מוכר מחזיר לדף הבית). דף חדש בעתיד ידרוש Rewrite משלו.
+
+### ADR-14: Build ב-Vercel ואזור ה-Functions
+
+**הקשר:** `npm install` מריץ `postinstall` שמוריד את דפדפני Playwright (ADR-11, מעל 150MB). ב-Build של Vercel אין בהם שימוש, והם מאטים את ה-Build ועלולים להכשיל אותו. בנוסף, סעיף 2.9 ממליץ להציב את ה-Functions קרוב לאזור Supabase; פרויקט ה-Dev נמצא ב-`eu-central-1` (פרנקפורט).
+
+**החלטה:** `scripts/install-browser.mjs` מדלג על התקנת הדפדפנים כאשר משתנה הסביבה `VERCEL` מוגדר (Vercel מגדיר אותו בזמן Build). ב-`vercel.json` מוגדר `"regions": ["fra1"]` (פרנקפורט), ופרויקט ה-Production ב-Supabase נוצר באותו אזור כמו Dev.
+
+**השלכות:** ה-Build ב-Vercel מתקין רק את התלויות של האתר. מעבר של Supabase לאזור אחר מחייב לעדכן את `regions` בהתאם. בתוכנית Hobby אפשר אזור Functions אחד בלבד, וזה מספיק לאתר.
