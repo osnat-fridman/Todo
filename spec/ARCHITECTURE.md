@@ -308,3 +308,22 @@ Chrome Desktop / Chrome Android (PWA) / Safari iPhone (PWA)
 **החלטה:** `@playwright/test` כ-devDependency; הדפדפנים Chromium ו-WebKit יותקנו לתוך `node_modules/playwright-core/.local-browsers` (`PLAYWRIGHT_BROWSERS_PATH=0`) על ידי `scripts/install-browser.mjs`, שירוץ אוטומטית כ-`postinstall` של `npm install`. `npm run test:e2e` יריץ את `e2e/*.spec.ts` מול `vercel dev` (פורט 3000) ופרויקט ה-Dev, בשלושה מצבים: Desktop Chrome, Mobile Chrome (Pixel 7) ו-Mobile Safari (iPhone, ב-WebKit). לפני ההרצה נשמר עותק של טבלת `tasks` ב-Dev ובסיומה הוא מוחזר (`test-support/devSnapshot.ts`, משותף עם בדיקות ה-Integration, לפי ADR-7). שגיאות שרת ומצב לא-מקוון מדומים בדפדפן (`page.route`, `setOffline`). מול Production מבוצעות רק בדיקות קריאה.
 
 **השלכות:** הרצה ראשונה של `npm install` מורידה יותר מ-150MB (שני דפדפנים). WebKit של Playwright מדמה את Safari אך אינו iPhone אמיתי, ולכן גרירה במגע אמיתי, בקר התאריך והתקנת PWA נבדקים ידנית בטלפון Android וב-iPhone. בזמן הרצת E2E הרשימה ב-Dev משתנה זמנית.
+
+### ADR-12: TypeScript 6 ולא TypeScript 7
+
+**הקשר:** בעת יצירת הפרויקט (Milestone 1) הגרסה העדכנית של TypeScript היא 7, שנכתבה מחדש ואינה כוללת את ה-JavaScript API של המהדר (`transpileModule` וכד'). `@vercel/node`, שבונה את ה-Vercel Functions ב-`vercel dev` וב-Deployment, משתמש ב-TypeScript של הפרויקט דרך ה-API הזה.
+
+**החלטה:** הפרויקט משתמש ב-`typescript@6` (הגרסה האחרונה שכוללת את ה-API), עבור `tsc -b` ועבור Vercel.
+
+**השלכות:** אין הבדל בקוד. מעבר ל-TypeScript 7 אפשרי כש-`@vercel/node` יתמוך בו; עד אז אין לשדרג את ה-Major.
+
+### ADR-13: הרצה מקומית ב-`npm start` ו-SPA fallback ל-`/about` בלבד
+
+**הקשר:** `vercel dev` דורש פרויקט Vercel מקושר (`npx vercel link`), ומסרב לרוץ כשסקריפט `dev` ב-`package.json` מפעיל אותו (`DEV_RECURSIVE_INVOCATION`). בנוסף, ב-`vercel dev` כלל Rewrite כללי (`/((?!api/).*)` → `/index.html`) תפס גם את קובצי המקור ש-Vite מגיש (`/src/*`, `/@vite/client`), והדף לא נטען.
+
+**החלטה:**
+- פרויקט Vercel נוצר ומקושר כבר ב-Milestone 1 (ללא חיבור ל-GitHub וללא משתני סביבה ב-Vercel – אלה ב-Milestone 2).
+- `npm start` מריץ את `vercel dev --listen 3000` (האתר וה-API יחד). `npm run dev` מריץ את Vite בלבד, בלי API, ומשמש את `vercel dev` עצמו (`devCommand` ב-`vercel.json`).
+- ה-SPA fallback ב-`vercel.json` הוא Rewrite מפורש של `/about` ל-`/index.html`, כפי שמוגדר בסעיף 2.9. נתיבי `/api/*`, קבצים סטטיים וקובצי Vite אינם מושפעים.
+
+**השלכות:** נתיב לא מוכר שנפתח ישירות בדפדפן מקבל 404 של Vercel (בתוך האתר, ניווט לנתיב לא מוכר מחזיר לדף הבית). דף חדש בעתיד ידרוש Rewrite משלו.

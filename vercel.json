@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "devCommand": "vite --port $PORT",
+  "outputDirectory": "dist",
+  "rewrites": [{ "source": "/about", "destination": "/index.html" }],
+  "functions": {
+    "api/**/*.ts": { "includeFiles": "certs/**" }
+  }
+}
