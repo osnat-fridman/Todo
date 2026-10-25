@@ -10,15 +10,15 @@
 | Frontend | React + Vite | אפליקציית Web מסוג SPA, עם Build סטטי |
 | עיצוב | CSS רגיל ו-Responsive CSS | ממשק עברי RTL למחשב ולמובייל, ללא Framework עיצוב נוסף |
 | ניווט | React Router | שני נתיבים: `/` ו-`/about` |
-| Drag & Drop | `@dnd-kit/core` + `@dnd-kit/sortable` | שינוי סדר במחשב וב-Android Touch; Sensors ו-Drag Handle נפרד |
-| PWA | Web App Manifest ו-HTTPS; Service Worker אופציונלי ומוגבל | התקנה ב-Chrome על Android; ללא Offline Data או סנכרון ברקע |
+| Drag & Drop | `@dnd-kit/core` + `@dnd-kit/sortable` | שינוי סדר במחשב ובמגע ב-Android וב-iPhone; Sensors ו-Drag Handle נפרד |
+| PWA | Web App Manifest, תגיות Apple ו-HTTPS; Service Worker אופציונלי ומוגבל | התקנה ב-Chrome על Android וב-Safari על iPhone (הוספה למסך הבית); ללא Offline Data או סנכרון ברקע |
 | Backend | Node.js + TypeScript באמצעות Vercel Functions | REST API, Validation, לוגיקה עסקית וכתיבה מאובטחת למסד הנתונים |
 | גישה ל-Database | `pg` (node-postgres), SQL פרמטרי | גישה ישירה ל-PostgreSQL מתוך השרת; Transactions לשינוי סדר |
 | Database | Supabase PostgreSQL | אחסון קבוע של רשימה משותפת אחת |
 | Database Migrations | קובצי SQL ב-Git; Supabase CLI מול Dev; Supabase GitHub Integration מול Production | ניהול Schema מבוקר ובר-שחזור; החלה אוטומטית על Production בעת Push |
 | אחסון קוד | GitHub | Repository יחיד עבור האפליקציה, API ו-Migrations |
 | Hosting ו-Deployment | Vercel, מחובר ל-GitHub | Build ופריסה אוטומטיים של Frontend ו-Serverless API, באותו Origin |
-| בדיקות | Vitest, React Testing Library, Playwright | בדיקות של לוגיקה, UI ותרחישי משתמש ב-Chrome |
+| בדיקות | Vitest, React Testing Library, Playwright | בדיקות של לוגיקה, UI ותרחישי משתמש ב-Chrome וב-Safari (WebKit) |
 
 ### החלטות ונימוקים
 
@@ -44,7 +44,7 @@
 ### 2.1 מבנה ורכיבים
 
 ```text
-Chrome Desktop / Chrome Android (PWA)
+Chrome Desktop / Chrome Android (PWA) / Safari iPhone (PWA)
                  │ HTTPS / Same Origin
                  ▼
           Vercel Deployment
@@ -101,7 +101,7 @@ Chrome Desktop / Chrome Android (PWA)
 - **תקרת משימות:** עד 1,000 משימות ברשימה. השרת סופר את המשימות בתוך ה-Transaction של היצירה, תחת אותה נעילה המשמשת לשינויי מבנה הרשימה (ראו 2.6), ודוחה יצירה כאשר כבר קיימות 1,000; כך שתי יצירות מקבילות אינן יכולות לחרוג מהתקרה. הלקוח מונע פתיחת יצירה כאשר ברשימה שבידיו 1,000 משימות, אך הבדיקה המחייבת היא בשרת.
 - אין Users, Accounts או קשרי Foreign Key נוספים. ה-Database אינו שומר טיוטות או מצב PWA.
 
-**החלטת יישום לגבי 'היום':** בטופס התאריך מוצג לפי התאריך המקומי של המכשיר, כדרישת חוויית המשתמש. לצורך Validation מחייב ועקבי בשרת יש להשתמש ב-Timezone מוסכם של המוצר; בהיעדר הגדרה עסקית במסמך המקור, **מוצעת כהנחת יישום `Asia/Jerusalem`**. אם המוצר מיועד למשתמשים באזורי זמן שונים, נדרש להחליט על כלל עסקי מוסכם לפני קיבוע מדיניות תאריכים; אין להסתמך על השעה של מכונת ה-Serverless או על `Date.toISOString()` כתחליף לתאריך מקומי.
+**'היום':** לפי ה-PRD (FR-02), בטופס התאריך מוצג לפי התאריך המקומי של המכשיר, וה-Validation המחייב בשרת מחושב לפי שעון ישראל (`Asia/Jerusalem`); ראו ADR-5. אין להסתמך על השעה של מכונת ה-Serverless או על `Date.toISOString()` כתחליף לתאריך מקומי.
 
 ### 2.4 REST API
 
@@ -119,7 +119,7 @@ Chrome Desktop / Chrome Android (PWA)
 **כללי חוזה:**
 - `title`, `description` יכולים להיות `null` או מחרוזת; לאחר `trim`, ערך ריק מנורמל ל-`null`. `dueDate` הוא `YYYY-MM-DD` או `null`; לא Timestamp.
 - `POST` מחזיר `201` ואת הרשומה החדשה; `PATCH` ו-`PUT` מחזירים `200` עם המשימה/הסדר המעודכנים; `DELETE` מחזיר `204`; `GET` מחזיר `200` עם מערך (גם אם ריק).
-- `400`/`422`: קלט לא תקין, עם `{error: {code, message, field?}}` והודעה בעברית; `404`: משימה לא קיימת; `409`: סדר לא תואם את רשימת המשימות הנוכחית, או יצירה כאשר הרשימה מלאה (`code: TASK_LIMIT_REACHED`); `429`: יותר מדי בקשות, כאשר זמין Rate Limit; `500`/`503`: תקלה זמנית.
+- `400`: קלט לא תקין (כולל Validation; אין שימוש ב-`422`), עם `{error: {code, message, field?}}` והודעה בעברית; `404`: משימה לא קיימת; `409`: סדר לא תואם את רשימת המשימות הנוכחית, או יצירה כאשר הרשימה מלאה (`code: TASK_LIMIT_REACHED`); `429`: יותר מדי בקשות, כאשר זמין Rate Limit; `500`/`503`: תקלה זמנית.
 - שרת מגביל `Content-Type`, גודל Body, אורכי מחרוזות ומספר מזהי המשימות במערך הסדר (עד 1,000). IDs נבדקים כ-UUID. SQL תמיד Parameterized. אין לקלוט או להחזיר HTML כ-HTML; React מציג טקסט משתמש כטקסט בלבד.
 - כל תשובת `GET /api/tasks` צריכה להימנע מ-Cache של תוכן המשתנה (`Cache-Control: no-store`), כדי שטעינה מחדש אכן תראה את המצב הנוכחי. לא משתמשים ב-SWR, Polling או WebSocket.
 
@@ -143,7 +143,7 @@ Chrome Desktop / Chrome Android (PWA)
 - כל פעולות שינוי מבנה הרשימה משתמשות ב-**אותו PostgreSQL transaction-level advisory lock**, בתוך Transaction יחיד ובאותו DB Client. השרת מעדכן מיקומים מחדש ל-0..N-1 תחת הנעילה, ומבצע Commit אטומי. נעילה זו אינה תשתית נוספת ואינה מזהה משתמש.
 - בקשת `PUT /api/tasks/order` חייבת לכלול את **כל מזהי המשימות כפי שהלקוח מכיר אותם**. תחת הנעילה, השרת קורא את קבוצת המזהים הקיימת ומאמת שקיימת התאמה מלאה אחד-לאחד, ללא כפילויות. אם נוספה/נמחקה משימה בין הטעינה לגרירה, מחזירים `409` והלקוח מציע Refresh; אין להשמיט בשקט משימות חדשות או להחזיר משימות שנמחקו.
 - אם שני מבקרים מסדרים את אותה קבוצת משימות בו-זמנית, **הסדר שנכתב אחרון קובע**, ללא UI לפתרון התנגשויות. בדיקת קבוצת מזהים ב-`409` היא הגנה מפני אובדן/השחתת מבנה הרשימה, **לא** זיהוי התנגשויות עריכה עסקי.
-- ב-`DELETE` של משימה שאינה קיימת וב-`PATCH` למשימה שנמחקה בידי מבקר אחר, מחזירים `404`; UI מציג שגיאה ורענון יכול לתקן את המצב.
+- ב-`DELETE` של משימה שאינה קיימת וב-`PATCH` (פרטים או סטטוס) למשימה שנמחקה בידי מבקר אחר, מחזירים `404`. בלקוח, `404` מסיר את המשימה מהרשימה; אם הייתה נבחרת, הבחירה מתאפסת וטיוטת העריכה מתבטלת, ומוצגת הודעה שהמשימה כבר לא קיימת (לפי ה-PRD).
 
 ### 2.7 אבטחה ופרטיות
 
@@ -158,6 +158,10 @@ Chrome Desktop / Chrome Android (PWA)
 
 - האפליקציה רצה דרך HTTPS ומספקת `manifest.webmanifest` עם `name`, `short_name`, `start_url: /`, `scope: /`, `display: standalone`, צבעים ואייקונים בגדלים 192×192 ו-512×512; `lang: he`, `dir: rtl` ככל שהשדות נתמכים.
 - אפשרות ההתקנה ב-Chrome על Android היא יכולת של הדפדפן; **אין להבטיח שהצעת ההתקנה תוצג בכל מכשיר**. אין דרישה לכפתור התקנה מיוחד.
+- **iPhone (Safari):** ההתקנה ידנית בלבד, דרך "שתף" ← "הוסף למסך הבית"; ב-iPhone אין אירוע התקנה או Prompt. Safari קורא את ה-Manifest (`name`, `start_url`, `display: standalone`), ובנוסף מוגדרים ב-`index.html`:
+  - `<link rel="apple-touch-icon">` עם אייקון PNG בגודל 180×180, ללא שקיפות, כדי להבטיח אייקון תקין במסך הבית.
+  - `<meta name="apple-mobile-web-app-title">` עם שם קצר, ו-`<meta name="apple-mobile-web-app-status-bar-style">` מתאים לצבעי העיצוב.
+  - `viewport-fit=cover` בתגית ה-`viewport`, והפריסה משתמשת ב-`env(safe-area-inset-*)` כדי שבמצב מסך מלא התוכן לא יוסתר על ידי ה-Notch, ה-Dynamic Island או פס הבית.
 - לא משתמשים ב-Caching של API Results, Background Sync או אחסון משימות ב-IndexedDB/Local Storage. אם נרשם Service Worker לצורכי PWA/Assets, יש לבטל Interception של `/api/*` ולמנוע הצגת רשימת משימות שמורה במצב Offline. כאשר אין חיבור, מציגים שגיאת רשת ומונעים פעולות נתונים.
 - הנתונים נשארים ב-PostgreSQL גם לאחר סגירת או הסרת התקנת ה-PWA; ה-PWA אינה יחידת אחסון נתונים נפרדת.
 
@@ -165,9 +169,9 @@ Chrome Desktop / Chrome Android (PWA)
 
 **Repository יחיד:** פרויקט React/Vite, תיקיית Vercel `api` ל-Handlers ב-TypeScript, לוגיקה משותפת בטוחה לשרת ו-`supabase/migrations` לקובצי SQL. אין צורך ב-Monorepo של Services נפרדים. מקור האמת ל-Schema הוא Migrations ב-GitHub.
 
-**Frontend + API ב-Vercel:** מחברים GitHub Repository לפרויקט Vercel אחד. בכל Push לענף הראשי Vercel מבצע Build ו-Production Deployment; Pull Requests יוצרים Preview Deployments בהתאם להגדרות. Build של Vite מפיק `dist`; `/api/*` מטופל ב-Vercel Functions ולא ב-React Router. יש להגדיר SPA fallback עבור `/about` בלי לדרוס נתיבי API, קבצים סטטיים או Manifest. כל השירות מתפרסם תחת Domain יחיד, עם HTTPS מובנה.
+**Frontend + API ב-Vercel:** מחברים GitHub Repository לפרויקט Vercel אחד. בכל Push לענף הראשי Vercel מבצע Build ו-Production Deployment. אין שימוש בענפים נוספים, Pull Requests או Preview Deployments: כל דחיפה היא לענף הראשי. Build של Vite מפיק `dist`; `/api/*` מטופל ב-Vercel Functions ולא ב-React Router. יש להגדיר SPA fallback עבור `/about` בלי לדרוס נתיבי API, קבצים סטטיים או Manifest. כל השירות מתפרסם תחת Domain יחיד, עם HTTPS מובנה.
 
-**Database ב-Supabase:** פרויקט PostgreSQL מנוהל. Backend Functions מתחברות באמצעות **Supabase Shared Transaction Pooler**, פורט 6543, עם SSL. ב-`pg.Pool` משתמשים ב-`max: 1` לכל Function Instance (ותקרות Connection/Idle/Query Timeout מתאימות), ושומרים Pool ברמת מודול לשימוש חוזר. תחת Pooler כל Transaction חייבת להשתמש באותו `client` משלב BEGIN ועד COMMIT/ROLLBACK; לא מריצים Transactions דרך קריאות מנותקות ל-`pool.query` [3][5]. יש להשתמש ב-Parameterized Queries ולא ב-Named Prepared Statements המבוססים על מצב Session. רצוי להציב את Functions באזור קרוב ככל האפשר לאזור Supabase כדי להפחית Latency.
+**Database ב-Supabase:** פרויקט PostgreSQL מנוהל. Backend Functions מתחברות באמצעות **Supabase Shared Transaction Pooler**, פורט 6543, עם SSL ואימות תעודת השרת (ADR-3). ב-`pg.Pool` משתמשים ב-`max: 1` לכל Function Instance (ותקרות Connection/Idle/Query Timeout מתאימות), ושומרים Pool ברמת מודול לשימוש חוזר. תחת Pooler כל Transaction חייבת להשתמש באותו `client` משלב BEGIN ועד COMMIT/ROLLBACK; לא מריצים Transactions דרך קריאות מנותקות ל-`pool.query` [3][5]. יש להשתמש ב-Parameterized Queries ולא ב-Named Prepared Statements המבוססים על מצב Session. רצוי להציב את Functions באזור קרוב ככל האפשר לאזור Supabase כדי להפחית Latency.
 
 **Migrations:** קובצי SQL ממוספרים/מתוארכים תחת `supabase/migrations`, עם Review ב-Git. הסדר קבוע: **קודם Dev, ורק אחר כך Production** (ראו ADR-1).
 - **Dev:** ה-Migration מוחלת על פרויקט ה-Dev במהלך הבנייה, באמצעות Supabase CLI (`supabase db push`). ה-CLI במחשב הפיתוח מקושר **לפרויקט ה-Dev בלבד** ולעולם אינו מקושר ל-Production.
@@ -175,18 +179,18 @@ Chrome Desktop / Chrome Android (PWA)
 - מאחר שהחלת ה-Migration וה-Deployment של הקוד רצים במקביל ואין ביניהם סדר מובטח, כל Migration חייבת להיות **תואמת-לאחור** לקוד שכבר רץ ב-Production, ולא הרסנית; Migration שעלולה למחוק נתונים מחייבת אישור מפורש של המשתמש לפני ה-Push.
 - אין להריץ Migrations בכל בקשת API או בכל Cold Start. אין לערוך Schema ידנית ללא Migration מתועדת [4][12].
 
-**סביבות:** שני פרויקטי Supabase נפרדים בענן: **Dev** ו-**Production**. פרויקט ה-Dev משמש את הפיתוח המקומי, את בדיקות ה-Integration ואת ה-Preview Deployments; פרויקט ה-Production משמש את האתר החי בלבד. Preview Deployments, פיתוח ובדיקות לעולם אינם מחוברים ל-Production Database. הנתונים בפרויקט ה-Dev הם נתוני בדיקה שמותר למחוק; בדיקות ה-Integration רשאיות לנקות את טבלת `tasks` שם, ורצות רק כאשר הוגדר להן במפורש Connection String של Dev. אין שימוש ב-Docker או במסד מקומי. התוכנית החינמית של Supabase מוגבלת לשני פרויקטים פעילים, כך ששני הפרויקטים מנצלים את המכסה במלואה; גם פרויקט ה-Dev עלול להיעצר לאחר חוסר פעילות ויש להפעילו מחדש בעת הצורך. אין לפרסם Database Credentials בתוצרי Build.
+**סביבות:** שני פרויקטי Supabase נפרדים בענן: **Dev** ו-**Production**. פרויקט ה-Dev משמש את הפיתוח המקומי ואת הבדיקות האוטומטיות; פרויקט ה-Production משמש את האתר החי בלבד. פיתוח ובדיקות לעולם אינם מחוברים ל-Production Database. הנתונים בפרויקט ה-Dev הם נתוני בדיקה שמותר למחוק; בדיקות ה-Integration רשאיות לנקות את טבלת `tasks` שם, ורצות רק כאשר הוגדר להן במפורש Connection String של Dev. אין שימוש ב-Docker או במסד מקומי. התוכנית החינמית של Supabase מוגבלת לשני פרויקטים פעילים, כך ששני הפרויקטים מנצלים את המכסה במלואה; גם פרויקט ה-Dev עלול להיעצר לאחר חוסר פעילות ויש להפעילו מחדש בעת הצורך. אין לפרסם Database Credentials בתוצרי Build.
 
 **הרצה מקומית:** שרת הפיתוח של Vite לבדו אינו מריץ את `/api/*`. ההרצה המקומית נעשית באמצעות `vercel dev` (Vercel CLI), שמריץ את ה-Frontend ואת ה-Functions יחד באותה כתובת מקומית, מול פרויקט ה-Dev. משתני הסביבה המקומיים נשמרים בקובץ `.env` שאינו ב-Git, עם `.env.example` המתעד את שמותיהם בלבד.
 
-**ניהול גרסאות:** לקבע גרסאות Major של Dependencies ו-Node LTS שנתמך ב-Vercel בעת יצירת הפרויקט, להשתמש ב-Lockfile ולבצע בדיקות ב-CI לפני Merge. לא לקבע במסמך גרסאות Patch חולפות.
+**ניהול גרסאות:** לקבע גרסאות Major של Dependencies ו-Node LTS שנתמך ב-Vercel בעת יצירת הפרויקט, להשתמש ב-Lockfile. אין CI: הבדיקות רצות מקומית במסגרת הבנייה של כל Milestone, לפני הדחיפה. לא לקבע במסמך גרסאות Patch חולפות.
 
 ### 2.10 אימות איכות ארכיטקטוני
 
 - **Unit:** `trim` ו-Validation, גבולות 100/2000, תאריך בעבר, תיאור ללא כותרת, שינוי סטטוס, סדר ותשובות API.
 - **Integration מול פרויקט ה-Dev ב-Supabase (לעולם לא מול Production):** CRUD, Atomic Reorder, מיקומים רציפים, שתי גרירות במקביל, יצירה/מחיקה במקביל לגרירה, `404` ו-`409`.
-- **End-to-end ב-Chrome:** יצירה ב-Modal, כשל שמירה ושמירת נתונים בטופס, שינוי שדות ושמירה ידנית, ביטול שינויים במעבר, מחיקה באישור, Checkbox, Drag & Drop במחשב וב-Touch על Android, ניווט ורענון שנטען מהשרת.
-- **בדיקות PWA:** תקינות Manifest/HTTPS ואפשרות התקנה ב-Chrome Android, ומצב רשת מנותקת ללא Offline Task Data.
+- **End-to-end ב-Chrome וב-Safari (WebKit):** יצירה ב-Modal, כשל שמירה ושמירת נתונים בטופס, שינוי שדות ושמירה ידנית, ביטול שינויים במעבר, מחיקה באישור, Checkbox, Drag & Drop במחשב ובמגע על Android ו-iPhone, ניווט ורענון שנטען מהשרת.
+- **בדיקות PWA:** תקינות Manifest/HTTPS ואפשרות התקנה ב-Chrome Android; ב-iPhone: הוספה למסך הבית, אייקון ושם נכונים, פתיחה במסך מלא ו-Safe Areas; ומצב רשת מנותקת ללא Offline Task Data.
 - כל בדיקה מכוונת לאימות הדרישות שכבר הוגדרו ב-PRD; אין כאן הצעה לפיצ'רים נוספים.
 
 ## 3. מקורות מרכזיים
@@ -210,7 +214,7 @@ Chrome Desktop / Chrome Android (PWA)
 
 ### ADR-1: החלת Migrations אוטומטית על Production דרך Supabase GitHub Integration
 
-**הקשר:** התכנון המקורי קבע הרצה ידנית של `supabase db push` פעמיים – על Dev ואז על Production – תוך החלפת הקישור של ה-CLI בין הפרויקטים. המשתמש אינו מתכנת, והנוהל אמור לשמש גם תלמידים לא-טכניים; החלפת קישור ידנית חושפת לטעות של הרצת פעולות על Production במקום על Dev. הנוהל הרצוי: בנייה ← בדיקה מקומית מול Dev ← "שמור שינויים ב-GitHub" ← הכול עולה ל-Production, ללא פקודות נוספות.
+**הקשר:** החלופה הפשוטה היא הרצה ידנית של `supabase db push` פעמיים – על Dev ואז על Production – תוך החלפת הקישור של ה-CLI בין הפרויקטים. המשתמש אינו מתכנת, והנוהל אמור לשמש גם תלמידים לא-טכניים; החלפת קישור ידנית חושפת לטעות של הרצת פעולות על Production במקום על Dev. הנוהל הרצוי: בנייה ← בדיקה מקומית מול Dev ← "שמור שינויים ב-GitHub" ← הכול עולה ל-Production, ללא פקודות נוספות.
 
 **החלטה:** ה-Migrations מוחלות על Dev במהלך הבנייה באמצעות Supabase CLI המקושר ל-Dev בלבד. פרויקט ה-Production מחובר ל-Repository ב-Supabase GitHub Integration עם *Deploy to production*, כך ש-Push לענף הראשי מחיל את ה-Migrations על Production אוטומטית. לפי תיעוד Supabase היכולת זמינה בכל תוכנית, כולל החינמית [12]. אם יתברר בפועל שאינה זמינה, החלופה היא GitHub Actions שמריץ `supabase db push` בעת Push לענף הראשי – אותו נוהל מבחינת המשתמש.
 
@@ -224,31 +228,31 @@ Chrome Desktop / Chrome Android (PWA)
 
 **הקשר:** סעיף 2.7 קובע שהאפליקציה לא תרוץ בהרשאות מנהל, ושיש לחסום גישה ציבורית לטבלה דרך ה-Data API. המשתמש רוצה ללמד תלמידים את הנוהל הנכון גם לפרויקטים עם מידע רגיש וטבלאות רבות.
 
-**החלטה:** בכל פרויקט Supabase נוצר ידנית, פעם אחת, משתמש `app_backend` עם סיסמה משלו (`create user app_backend with password '...'`), כך שהסיסמה אינה נכתבת בקוד. ה-Migrations מעניקות לו הרשאות מפורשות לכל טבלה שהאפליקציה צריכה (`grant select, insert, update, delete`), מפעילות RLS עם Policy ייעודי ל-`app_backend` ושוללות גישה מ-`anon`/`authenticated`. ה-Backend מתחבר דרך ה-Transaction Pooler בשם `app_backend.<project-ref>`. ה-Data API כובה ביצירת הפרויקטים.
+**החלטה:** בכל פרויקט Supabase ייווצר ידנית, פעם אחת, משתמש `app_backend` עם סיסמה משלו (`create user app_backend with password '...'`), כך שהסיסמה אינה נכתבת בקוד. ה-Migrations יעניקו לו הרשאות מפורשות לכל טבלה שהאפליקציה צריכה (`grant select, insert, update, delete`), יפעילו RLS עם Policy ייעודי ל-`app_backend` וישללו גישה מ-`anon`/`authenticated`. ה-Backend יתחבר דרך ה-Transaction Pooler בשם `app_backend.<project-ref>`. ה-Data API יכובה בעת יצירת כל פרויקט.
 
-**השלכות:** כל טבלה חדשה בעתיד חייבת לכלול באותה Migration את ה-`grant` וה-Policy ל-`app_backend`, אחרת ה-Backend לא יוכל לגשת אליה. דליפה של פרטי החיבור מוגבלת לטבלאות שהוענקו. שם המשתמש זהה בכל הסביבות; הסיסמאות שונות.
+**השלכות:** המשתמש `app_backend` חייב להתקיים בפרויקט **לפני** שה-Migration הראשונה מוחלת עליו: ב-Dev לפני ה-`supabase db push` הראשון (Milestone 1), וב-Production לפני הדחיפה הראשונה לגיטהאב (Milestone 2). אחרת ה-Migration תיכשל, וב-Production האתר החי עלול להישאר בשגיאה. כל טבלה חדשה בעתיד חייבת לכלול באותה Migration את ה-`grant` וה-Policy ל-`app_backend`, אחרת ה-Backend לא יוכל לגשת אליה. דליפה של פרטי החיבור מוגבלת לטבלאות שהוענקו. שם המשתמש זהה בכל הסביבות; הסיסמאות שונות.
 
-### ADR-3: הצפנת החיבור למסד ללא אימות שרשרת התעודות
+### ADR-3: חיבור מוצפן למסד עם אימות תעודת השרת
 
-**הקשר:** החיבור מ-Vercel Functions ל-Supabase Pooler חייב להיות מוצפן. תעודת ה-Pooler של Supabase אינה חתומה על ידי רשות תעודות המוכרת ל-Node.js כברירת מחדל; אימות מלא מחייב לצרף לפרויקט את תעודת ה-CA של Supabase.
+**הקשר:** החיבור מ-Vercel Functions ל-Supabase Pooler חייב להיות מוצפן. תעודת ה-Pooler של Supabase אינה חתומה על ידי רשות תעודות המוכרת ל-Node.js כברירת מחדל. ויתור על אימות (`rejectUnauthorized: false`) מצפין את התעבורה אך אינו מוודא שהצד השני הוא באמת שרת Supabase; כדי ללמד את הנוהל הנכון, האימות מופעל במלואו.
 
-**החלטה:** ב-`pg.Pool` מוגדר `ssl: { rejectUnauthorized: false }` – התעבורה מוצפנת, אך זהות השרת אינה מאומתת מול CA.
+**החלטה:** תעודת ה-CA של Supabase (ציבורית; המשתמש מוריד אותה פעם אחת מלוח הבקרה של Supabase, בהגדרות ה-SSL של מסד הנתונים) תישמר ב-Git בקובץ `certs/supabase-ca.crt`. ב-`pg.Pool` יוגדר `ssl: { ca: <תוכן הקובץ>, rejectUnauthorized: true }`. אותה תעודה משמשת את Dev ואת Production.
 
-**השלכות:** הגנה מפני האזנה, אך לא מפני התחזות לשרת ברמת הרשת (סיכון נמוך בין Vercel ל-Supabase). שיפור אפשרי בעתיד: לצרף את תעודת ה-CA של Supabase (ציבורית, מותר ב-Git) ולהפעיל אימות מלא.
+**השלכות:** הגנה גם מפני האזנה וגם מפני התחזות לשרת. אם Supabase תחליף בעתיד את תעודת ה-CA, החיבור ייכשל עד להחלפת הקובץ; הודעת השגיאה בשרת צריכה לציין שמדובר בבעיית תעודה. התעודה אינה סוד, ומותר לשמור אותה ב-Git.
 
 ### ADR-4: כלי ה-CLI כתלויות פיתוח של הפרויקט, וגופנים
 
 **הקשר:** נדרשים Supabase CLI ו-Vercel CLI; `DESIGN.md` מציג את Inter ואינו קובע גופן עברי.
 
-**החלטה:** `supabase` ו-`vercel` מותקנים כ-devDependencies ומופעלים ב-`npx`, כך שהגרסה מקובעת ב-Lockfile ואין צורך בהתקנה גלובלית. Inter נטען מקומית מחבילת `@fontsource-variable/inter` (ללא פנייה לשירות חיצוני) עבור טקסט לטיני ומספרים; לעברית משמש גופן ה-Sans-serif של המערכת (Segoe UI / Roboto / Noto Sans Hebrew).
+**החלטה:** `supabase` ו-`vercel` יותקנו כ-devDependencies ויופעלו ב-`npx`, כך שהגרסה מקובעת ב-Lockfile ואין צורך בהתקנה גלובלית. Inter ייטען מקומית מחבילת `@fontsource-variable/inter` (ללא פנייה לשירות חיצוני) עבור טקסט לטיני ומספרים; לעברית ישמש גופן ה-Sans-serif של המערכת (Segoe UI / Roboto / Noto Sans Hebrew).
 
-**השלכות:** `npm install` מתקין את כל הכלים. `npm audit` מדווח על חולשות בתלויות של Vercel CLI בלבד – כלי פיתוח שאינו נכלל באתר; תלויות האתר עצמו נקיות.
+**השלכות:** `npm install` מתקין את כל הכלים. אם `npm audit` ידווח על חולשות, יש להבחין בין תלויות של כלי פיתוח (שאינם נכללים באתר) לבין תלויות האתר עצמו, ולטפל באחרונות.
 
 ### ADR-5: "היום" לצורך Validation של תאריך יעד
 
-**הקשר:** תאריך יעד חייב להיות היום או בעתיד (ביצירה, ובעדכון כשהתאריך משתנה). סעיף 2.3 הציע כהנחת יישום את `Asia/Jerusalem` לבדיקה בשרת, ואסר להסתמך על שעון מכונת ה-Serverless או על `toISOString()`.
+**הקשר:** תאריך יעד חייב להיות היום או בעתיד (ביצירה, ובעדכון כשהתאריך משתנה). ה-PRD (FR-02) קובע ש"היום" נבדק לפי שעון ישראל, וסעיף 2.3 אוסר להסתמך על שעון מכונת ה-Serverless או על `toISOString()`.
 
-**החלטה:** בשרת "היום" מחושב לפי `Asia/Jerusalem` (`Intl.DateTimeFormat`), בקבוע `PRODUCT_TIME_ZONE` ב-`shared/validation.ts`. בטופס ברירת המחדל וה-`min` של שדה התאריך הם התאריך המקומי של המכשיר.
+**החלטה:** בשרת "היום" יחושב לפי `Asia/Jerusalem` (`Intl.DateTimeFormat`), בקבוע `PRODUCT_TIME_ZONE` ב-`shared/validation.ts`. בטופס ברירת המחדל וה-`min` של שדה התאריך הם התאריך המקומי של המכשיר.
 
 **השלכות:** למשתמשים בישראל הלקוח והשרת מסכימים תמיד. משתמש באזור זמן אחר, בשעות שבהן התאריך אצלו מוקדם מזה שבישראל, עלול לקבל מהשרת "תאריך היעד לא יכול להיות בעבר" על ברירת המחדל; ההודעה מוצגת בטופס, והוא יכול לבחור תאריך אחר או לנקות. שינוי אזור הזמן הוא שינוי של קבוע אחד.
 
@@ -256,7 +260,7 @@ Chrome Desktop / Chrome Android (PWA)
 
 **הקשר:** אותם כללים (כותרת או תיאור, 100/2,000 תווים, תאריך) נאכפים בטופס ובשרת, עם אותן הודעות בעברית. שכפול שלהם בשני מקומות עלול ליצור סתירות.
 
-**החלטה:** קובץ אחד, `shared/validation.ts`, מכיל את הכללים וההודעות ונטען גם ב-React וגם ב-Vercel Functions. אורך נמדד בתווים (Code Points), כמו `varchar` ב-PostgreSQL, ולא ביחידות UTF-16 של JavaScript. השרת הוא הבדיקה המחייבת.
+**החלטה:** קובץ אחד, `shared/validation.ts`, יכיל את הכללים וההודעות (בנוסחים שב-PRD) וייטען גם ב-React וגם ב-Vercel Functions. אורך נמדד בתווים (Code Points), כמו `varchar` ב-PostgreSQL, ולא ביחידות UTF-16 של JavaScript. השרת הוא הבדיקה המחייבת.
 
 **השלכות:** שינוי כלל נעשה במקום אחד. הקוד ב-`shared/` חייב להישאר בטוח לדפדפן (ללא סודות או גישה ל-Database).
 
@@ -264,9 +268,9 @@ Chrome Desktop / Chrome Android (PWA)
 
 **הקשר:** בדיקת תקרת 1,000 המשימות ובקשות מקבילות דורשת Database אמיתי. ARCHITECTURE 2.9 מתיר לבדיקות לנקות את `tasks` ב-Dev, אך המשתמש בודק ידנית עם נתוני בדיקה שם.
 
-**החלטה:** בדיקות Integration (`*.integration.test.ts`) רצות רק דרך `npm run test:integration`, נפרד מ-`npm test`, וטוענות את `DATABASE_URL` מ-`.env` (Dev בלבד). בתחילת ההרצה נשמר עותק של כל המשימות, ובסיומה הן מוחזרות בדיוק כפי שהיו. שני מבקרים מדומים באמצעות שני Pools נפרדים.
+**החלטה:** בדיקות Integration (`*.integration.test.ts`) ירוצו רק דרך `npm run test:integration`, נפרד מ-`npm test`, ויטענו את `DATABASE_URL` מ-`.env` (Dev בלבד). בתחילת ההרצה נשמר עותק של כל המשימות, ובסיומה הן מוחזרות בדיוק כפי שהיו. שני מבקרים מדומים באמצעות שני Pools נפרדים.
 
-**השלכות:** הרצה דורשת חיבור ל-Dev ולוקחת זמן; בזמן ההרצה הרשימה ב-Dev משתנה זמנית. אם ההרצה נקטעת באמצע בכוח, ייתכן שיהיה צורך להריץ מחדש את `supabase/dev-seed.sql`.
+**השלכות:** הרצה דורשת חיבור ל-Dev ולוקחת זמן; בזמן ההרצה הרשימה ב-Dev משתנה זמנית. לכן הבדיקות האוטומטיות (Integration ו-E2E) רצות רק בשלבי הבנייה והתיקונים, ולעולם לא בזמן שהאפליקציה רצה לבדיקה הידנית של המשתמש; ובזמן שהן רצות המשתמש אינו בודק ידנית מול Dev. אם ההרצה נקטעת באמצע בכוח, ייתכן שיהיה צורך להריץ מחדש את `supabase/dev-seed.sql` (קובץ נתוני הבדיקה שנוצר ב-Milestone 1).
 
 ### ADR-8: עדכון פרטים בנעילת שורה, ומחיקה עם נרמול מיקומים
 
@@ -281,26 +285,26 @@ Chrome Desktop / Chrome Android (PWA)
 **הקשר:** Checkbox וגרירה נשמרים מיד (PRD זרימות 4–5), ומותר UI אופטימי בתנאי Rollback (2.2). שינוי סדר הוא שינוי מבנה הרשימה ועלול להתנגש ביצירה/מחיקה/גרירה במקביל (2.6). ב-Vercel, נתיב `api/tasks/[id].ts` אינו יכול לשבת לצד תיקייה `api/tasks/[id]/` עבור `/status`.
 
 **החלטה:**
-- ה-Handler של משימה בודדת עבר ל-`api/tasks/[id]/index.ts`; לצדו `[id]/status.ts`, ו-`api/tasks/order.ts` (נתיב סטטי, גובר על `[id]`).
+- ה-Handler של משימה בודדת ימוקם ב-`api/tasks/[id]/index.ts`; לצדו `[id]/status.ts`, ו-`api/tasks/order.ts` (נתיב סטטי, גובר על `[id]`).
 - `PATCH /api/tasks/:id/status` שומר ערך מפורש (`{completed}`, לא Toggle) בשאילתת `UPDATE` אחת, **בלי** ה-Advisory Lock: אינו נוגע ב-`position` או בשדות הפרטים, ולכן אינו מתנגש בשינויי מבנה.
-- `PUT /api/tasks/order` רץ תחת אותו Advisory Lock של יצירה/מחיקה, משווה את קבוצת המזהים שנשלחה לקבוצה במסד (אחד-לאחד, ללא כפילויות), ובאי-התאמה מחזיר `409 ORDER_CONFLICT` בלי לשנות דבר. העדכון הוא שאילתה אחת עם `unnest($1::uuid[]) with ordinality`, והתשובה היא הרשימה בסדרה החדש. מגבלת ה-Body בנתיב זה 64KB (1,000 UUID ≈ 39KB), ובשאר הנתיבים נשארת 16KB.
-- בלקוח, הסימון והגרירה מוצגים מיד. בכישלון מוחזר **רק** השדה שהשתנה: `completed` של אותה משימה, או סדר הרשימה הקודם (`restoreOrder`), כך ששינויים אחרים שקרו בינתיים נשמרים. ב-`409` מוצג כפתור "רענן את הרשימה" שטוען את הרשימה מחדש מהשרת. Checkbox מושבת עד שבקשת הסטטוס שלו מסתיימת, וגרירה נוספת מושבתת עד שהשמירה הקודמת מסתיימת, כדי שתשובות לא יגיעו בסדר הפוך.
-- הגרירה מופעלת רק מידית ייעודית (`touch-action: none`) באמצעות `PointerSensor` (עכבר ומגע) ו-`KeyboardSensor` (נגישות), עם הודעות קורא מסך בעברית.
+- `PUT /api/tasks/order` רץ תחת אותו Advisory Lock של יצירה/מחיקה, משווה את קבוצת המזהים שנשלחה לקבוצה במסד (אחד-לאחד, ללא כפילויות), ובאי-התאמה מחזיר `409 ORDER_CONFLICT` בלי לשנות דבר. העדכון הוא שאילתה אחת עם `unnest($1::uuid[]) with ordinality`, והתשובה היא הרשימה בסדרה החדש. מגבלת ה-Body בנתיב זה 64KB (1,000 UUID ≈ 39KB), ובשאר הנתיבים 16KB.
+- בלקוח, הסימון והגרירה מוצגים מיד. בכישלון מוחזר **רק** השדה שהשתנה: `completed` של אותה משימה, או סדר הרשימה הקודם, כך ששינויים אחרים שקרו בינתיים נשמרים. ב-`409` מוצג כפתור "רענן את הרשימה" שטוען את הרשימה מחדש מהשרת. Checkbox מושבת עד שבקשת הסטטוס שלו מסתיימת, וגרירה נוספת מושבתת עד שהשמירה הקודמת מסתיימת, כדי שתשובות לא יגיעו בסדר הפוך.
+- הגרירה מופעלת רק מידית ייעודית (`touch-action: none`) באמצעות `PointerSensor` (עכבר ומגע) ו-`KeyboardSensor` (נגישות), עם הודעות קורא מסך בעברית. בידית מוגדרים גם `user-select: none` ו-`-webkit-touch-callout: none`, כדי שב-iPhone לחיצה ארוכה עליה לא תפתח בחירת טקסט או תפריט של Safari.
 
-**השלכות:** אין צורך ב-Migration. סטטוס וסדר מקבילים אינם דורסים זה את זה. גרירה מתוך רשימה שאינה עדכנית נדחית במפורש ואינה משמיטה משימות. שמירת `handleSaved` לוקחת מהשרת רק את שדות הפרטים, כדי לא לדרוס סימון שעדיין נשמר.
+**השלכות:** אין צורך ב-Migration. סטטוס וסדר מקבילים אינם דורסים זה את זה. גרירה מתוך רשימה שאינה עדכנית נדחית במפורש ואינה משמיטה משימות. עדכון ה-State לאחר שמירת פרטים לוקח מתשובת השרת רק את שדות הפרטים, כדי לא לדרוס סימון שעדיין נשמר.
 
 ### ADR-10: PWA ללא Service Worker
 
-**הקשר:** סעיף 2.8 מגדיר Service Worker כאופציונלי, ואוסר הצגת רשימת משימות שמורה או שינויים במצב Offline. Chrome ב-Android מאפשר התקנה עם Manifest תקין ו-HTTPS.
+**הקשר:** סעיף 2.8 מגדיר Service Worker כאופציונלי, ואוסר הצגת רשימת משימות שמורה או שינויים במצב Offline. Chrome ב-Android מאפשר התקנה עם Manifest תקין ו-HTTPS, ו-Safari ב-iPhone מאפשר הוספה למסך הבית גם ללא Service Worker.
 
-**החלטה:** האתר מספק `public/manifest.webmanifest` (שם, `display: standalone`, `lang: he`, `dir: rtl`, אייקונים 192/512 ואייקון `maskable`) ו-`theme-color`, **ללא** Service Worker. האייקונים נוצרים מקובצי SVG ב-`public/icons/` בסקריפט `scripts/generate-icons.mjs`, שמשתמש ב-Chromium של Playwright שמותקן ממילא. כשאין חיבור מוצגת הודעה קבועה (`OfflineNotice`) בשני הדפים; פעולות נכשלות בבקשת הרשת ומחזירות את המצב הקודם, כמו בכל כשל שרת.
+**החלטה:** האתר יספק `public/manifest.webmanifest` (שם, `display: standalone`, `lang: he`, `dir: rtl`, אייקונים 192/512 ואייקון `maskable`) ו-`theme-color`, **ללא** Service Worker, וכן את תגיות ה-Apple ל-iPhone שבסעיף 2.8 (כולל `apple-touch-icon` בגודל 180×180). האייקונים, כולל אייקון ה-Apple, ייווצרו מקובצי SVG ב-`public/icons/` בסקריפט `scripts/generate-icons.mjs`, שמשתמש ב-Chromium של Playwright שמותקן ממילא. כשאין חיבור תוצג הודעה קבועה (`OfflineNotice`, בנוסח שב-PRD) בשני הדפים; פעולות נכשלות בבקשת הרשת ומחזירות את המצב הקודם, כמו בכל כשל שרת.
 
-**השלכות:** אין שום מנגנון שיכול לשמור משימות או תשובות API במכשיר. פתיחה בלי חיבור מציגה את דף "אין אינטרנט" של Chrome. אם יתברר במכשיר כלשהו שההתקנה דורשת Service Worker, החלופה היא Service Worker מינימלי שמעביר כל בקשה לרשת ללא Cache.
+**השלכות:** אין שום מנגנון שיכול לשמור משימות או תשובות API במכשיר. פתיחה בלי חיבור מציגה את דף "אין אינטרנט" של הדפדפן (Chrome ב-Android או Safari ב-iPhone). אם יתברר במכשיר כלשהו שההתקנה דורשת Service Worker, החלופה היא Service Worker מינימלי שמעביר כל בקשה לרשת ללא Cache.
 
 ### ADR-11: בדיקות E2E ב-Playwright מול Dev, והכלים בתוך הפרויקט
 
-**הקשר:** סעיף 2.10 דורש בדיקות End-to-End ב-Chrome. המשתמש דורש שכל ההתקנות יהיו בתוך תיקיית הפרויקט בלבד (המשך ל-ADR-4).
+**הקשר:** סעיף 2.10 דורש בדיקות End-to-End ב-Chrome וב-Safari (WebKit). כל ההתקנות צריכות להיות בתוך תיקיית הפרויקט בלבד (המשך ל-ADR-4).
 
-**החלטה:** `@playwright/test` כ-devDependency; דפדפן Chromium מותקן לתוך `node_modules/playwright-core/.local-browsers` (`PLAYWRIGHT_BROWSERS_PATH=0`) על ידי `scripts/install-browser.mjs`, שרץ אוטומטית כ-`postinstall` של `npm install`. `npm run test:e2e` מריץ את `e2e/*.spec.ts` מול `vercel dev` (פורט 3000) ופרויקט ה-Dev, בשני מצבים: Desktop Chrome ו-Mobile Chrome (Pixel 7). לפני ההרצה נשמר עותק של טבלת `tasks` ב-Dev ובסיומה הוא מוחזר (`test-support/devSnapshot.ts`, משותף עם בדיקות ה-Integration, לפי ADR-7). שגיאות שרת ומצב לא-מקוון מדומים בדפדפן (`page.route`, `setOffline`). מול Production מבוצעות רק בדיקות קריאה.
+**החלטה:** `@playwright/test` כ-devDependency; הדפדפנים Chromium ו-WebKit יותקנו לתוך `node_modules/playwright-core/.local-browsers` (`PLAYWRIGHT_BROWSERS_PATH=0`) על ידי `scripts/install-browser.mjs`, שירוץ אוטומטית כ-`postinstall` של `npm install`. `npm run test:e2e` יריץ את `e2e/*.spec.ts` מול `vercel dev` (פורט 3000) ופרויקט ה-Dev, בשלושה מצבים: Desktop Chrome, Mobile Chrome (Pixel 7) ו-Mobile Safari (iPhone, ב-WebKit). לפני ההרצה נשמר עותק של טבלת `tasks` ב-Dev ובסיומה הוא מוחזר (`test-support/devSnapshot.ts`, משותף עם בדיקות ה-Integration, לפי ADR-7). שגיאות שרת ומצב לא-מקוון מדומים בדפדפן (`page.route`, `setOffline`). מול Production מבוצעות רק בדיקות קריאה.
 
-**השלכות:** הרצה ראשונה של `npm install` מורידה כ-150MB. גרירה במגע אמיתי והתקנת PWA בטלפון נבדקות ידנית. בזמן הרצת E2E הרשימה ב-Dev משתנה זמנית.
+**השלכות:** הרצה ראשונה של `npm install` מורידה יותר מ-150MB (שני דפדפנים). WebKit של Playwright מדמה את Safari אך אינו iPhone אמיתי, ולכן גרירה במגע אמיתי, בקר התאריך והתקנת PWA נבדקים ידנית בטלפון Android וב-iPhone. בזמן הרצת E2E הרשימה ב-Dev משתנה זמנית.
