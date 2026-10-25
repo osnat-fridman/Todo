@@ -51,6 +51,14 @@ export class TaskValidationError extends Error {
   }
 }
 
+/** Thrown when a new order does not list exactly the tasks in the database (ADR-9). */
+export class OrderConflictError extends Error {
+  constructor() {
+    super("The task list changed before the order was saved.");
+    this.name = "OrderConflictError";
+  }
+}
+
 export type TasksRepository = {
   listTasks(): Promise<Task[]>;
   /** Adds a validated task at the end of the list, under the shared list lock. */
@@ -62,6 +70,13 @@ export type TasksRepository = {
   updateTaskDetails(id: string, input: TaskInput, today: string): Promise<Task>;
   /** Deletes a task and renumbers positions to 0..N-1, under the shared list lock. */
   deleteTask(id: string): Promise<void>;
+  /** Saves the explicit status only; never touches position or details, so it takes no list lock (ADR-9). */
+  setTaskCompleted(id: string, completed: boolean): Promise<Task>;
+  /**
+   * Replaces the whole order under the shared list lock. The ids must match the stored tasks
+   * one-to-one; otherwise nothing changes and OrderConflictError is thrown. Returns the new list.
+   */
+  reorderTasks(orderedIds: string[]): Promise<Task[]>;
 };
 
 async function inTransaction<T>(db: pg.Pool, work: (client: pg.PoolClient) => Promise<T>): Promise<T> {
@@ -139,6 +154,41 @@ export function createTasksRepository(db: pg.Pool): TasksRepository {
                      from public.tasks) ordered
             where t.id = ordered.id and t.position <> ordered.new_position`,
         );
+      });
+    },
+
+    async setTaskCompleted(id, completed) {
+      const { rows } = await db.query<TaskRow>(
+        `update public.tasks set completed = $2, updated_at = now() where id = $1 returning ${TASK_COLUMNS}`,
+        [id, completed],
+      );
+      if (rows.length === 0) throw new TaskNotFoundError();
+      return toTask(rows[0]);
+    },
+
+    reorderTasks(orderedIds) {
+      return inTransaction(db, async (client) => {
+        await lockTaskList(client);
+        const { rows: stored } = await client.query<{ id: string }>("select id from public.tasks");
+        const storedIds = new Set(stored.map((row) => row.id));
+        const sentIds = new Set(orderedIds.map((id) => id.toLowerCase()));
+        const matches =
+          sentIds.size === orderedIds.length &&
+          sentIds.size === storedIds.size &&
+          [...sentIds].every((id) => storedIds.has(id));
+        if (!matches) throw new OrderConflictError();
+
+        await client.query(
+          `update public.tasks t
+              set position = (o.ord - 1)::int
+             from unnest($1::uuid[]) with ordinality as o(id, ord)
+            where t.id = o.id and t.position <> o.ord - 1`,
+          [orderedIds],
+        );
+        const { rows } = await client.query<TaskRow>(
+          `select ${TASK_COLUMNS} from public.tasks order by position asc, id asc`,
+        );
+        return rows.map(toTask);
       });
     },
   };

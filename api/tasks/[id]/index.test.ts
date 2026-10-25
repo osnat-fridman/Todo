@@ -3,33 +3,8 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "../../../shared/types.js";
 import { TaskNotFoundError, TaskValidationError, type TasksRepository } from "../../../server/tasksRepository.js";
+import { fakeRepository, fakeResponse } from "../../../test-support/apiHandlers.js";
 import { createHandler } from "./index.js";
-
-function fakeResponse() {
-  const res = {
-    statusCode: 0,
-    ended: false,
-    headers: {} as Record<string, string>,
-    body: undefined as unknown,
-    setHeader(name: string, value: string) {
-      res.headers[name.toLowerCase()] = value;
-      return res;
-    },
-    status(code: number) {
-      res.statusCode = code;
-      return res;
-    },
-    json(body: unknown) {
-      res.body = body;
-      return res;
-    },
-    end() {
-      res.ended = true;
-      return res;
-    },
-  };
-  return res;
-}
 
 const ID = "7c1f8a52-4c55-4f5e-9d0e-0a1b2c3d4e5f";
 // 2026-10-25 12:00 in Israel.
@@ -50,7 +25,7 @@ function call(
   options: { id?: unknown; body?: unknown; headers?: Record<string, string> } = {},
 ) {
   const res = fakeResponse();
-  const repo = { listTasks: vi.fn(), createTask: vi.fn(), updateTaskDetails: vi.fn(), deleteTask: vi.fn(), ...repository };
+  const repo = fakeRepository(repository);
   const handler = createHandler(() => repo, () => NOW);
   const req = {
     method,

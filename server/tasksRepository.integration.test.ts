@@ -7,8 +7,10 @@ import {
   takeSnapshot,
   type SnapshotRow,
 } from "../test-support/devSnapshot.js";
+import { lockTaskList } from "./listLock.js";
 import {
   createTasksRepository,
+  OrderConflictError,
   TaskLimitError,
   TaskNotFoundError,
   TaskValidationError,
@@ -16,6 +18,35 @@ import {
 
 const TODAY = "2026-10-25";
 const MISSING_ID = "00000000-0000-4000-8000-000000000000";
+
+const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** A second visitor's pool, already connected, so connection setup does not change who queues first. */
+async function connectedPool(): Promise<pg.Pool> {
+  const otherPool = createTestPool();
+  await otherPool.query("select 1");
+  return otherPool;
+}
+
+/**
+ * Holds the shared list lock from a third connection while `start` queues operations behind it,
+ * then releases it so they run in the order they were queued.
+ */
+async function withListLockHeld<T>(start: () => Promise<T>): Promise<T> {
+  const lockPool = createTestPool();
+  const client = await lockPool.connect();
+  try {
+    await client.query("begin");
+    await lockTaskList(client);
+    const work = start();
+    await pause(500);
+    await client.query("commit");
+    return await work;
+  } finally {
+    client.release();
+    await lockPool.end();
+  }
+}
 
 describe("tasks repository (Dev)", () => {
   let pool: pg.Pool;
@@ -234,5 +265,148 @@ describe("tasks repository (Dev)", () => {
     const remaining = await createTasksRepository(pool).listTasks();
     expect(remaining.map((t) => t.position)).toEqual([0, 1, 2]);
     expect(remaining.map((t) => t.title)).toEqual(["ב", "ג", "ד"]);
+  });
+
+  it("saves the status in both directions without touching details or position", async () => {
+    const [task] = await replaceTasks(pool, [{ title: "א", description: "ת", dueDate: "2030-01-01", position: 0 }]);
+    const repo = createTasksRepository(pool);
+    expect(await repo.setTaskCompleted(task.id, true)).toEqual({ ...task, completed: true });
+    expect(await repo.setTaskCompleted(task.id, false)).toEqual(task);
+    expect(await repo.listTasks()).toEqual([task]);
+    await expect(repo.setTaskCompleted(MISSING_ID, true)).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it("saves the exact new order with contiguous positions", async () => {
+    const tasks = await replaceTasks(pool, [
+      { title: "א", position: 0 },
+      { title: "ב", position: 3, completed: true },
+      { title: "ג", position: 8 },
+    ]);
+    const reordered = await createTasksRepository(pool).reorderTasks([tasks[2].id, tasks[0].id, tasks[1].id]);
+    expect(reordered.map((t) => [t.title, t.position, t.completed])).toEqual([
+      ["ג", 0, false],
+      ["א", 1, false],
+      ["ב", 2, true],
+    ]);
+    expect(await createTasksRepository(pool).listTasks()).toEqual(reordered);
+  });
+
+  it("refuses an order that does not list exactly the stored tasks, and changes nothing", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }, { title: "ג" }]);
+    const [a, b, c] = tasks.map((t) => t.id);
+    const repo = createTasksRepository(pool);
+    for (const ids of [[b, a], [b, a, c, MISSING_ID], [b, a, MISSING_ID], [b, a, a], [c, b, a, a]]) {
+      await expect(repo.reorderTasks(ids)).rejects.toBeInstanceOf(OrderConflictError);
+    }
+    expect(await repo.listTasks()).toEqual(tasks);
+  });
+
+  it("lets the last of two parallel reorders win, without mixing them", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }, { title: "ג" }, { title: "ד" }]);
+    const [a, b, c, d] = tasks.map((t) => t.id);
+    const otherPool = await connectedPool();
+    try {
+      await withListLockHeld(async () => {
+        const first = createTasksRepository(pool).reorderTasks([d, c, b, a]);
+        await pause(200);
+        const second = createTasksRepository(otherPool).reorderTasks([b, a, d, c]);
+        return Promise.all([first, second]);
+      });
+    } finally {
+      await otherPool.end();
+    }
+    const stored = await createTasksRepository(pool).listTasks();
+    expect(stored.map((t) => t.title)).toEqual(["ב", "א", "ד", "ג"]);
+    expect(stored.map((t) => t.position)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("keeps a create that runs right after a reorder, at the end", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }]);
+    const otherPool = await connectedPool();
+    try {
+      await withListLockHeld(async () => {
+        const reorder = createTasksRepository(pool).reorderTasks([tasks[1].id, tasks[0].id]);
+        await pause(200);
+        const create = createTasksRepository(otherPool).createTask({ title: "ג", description: null, dueDate: null });
+        return Promise.all([reorder, create]);
+      });
+    } finally {
+      await otherPool.end();
+    }
+    const stored = await createTasksRepository(pool).listTasks();
+    expect(stored.map((t) => [t.title, t.position])).toEqual([
+      ["ב", 0],
+      ["א", 1],
+      ["ג", 2],
+    ]);
+  });
+
+  it("refuses a reorder that runs right after a create, and keeps the new task", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }]);
+    const otherPool = await connectedPool();
+    let reorderResult: unknown;
+    try {
+      await withListLockHeld(async () => {
+        const create = createTasksRepository(otherPool).createTask({ title: "ג", description: null, dueDate: null });
+        await pause(200);
+        const reorder = createTasksRepository(pool)
+          .reorderTasks([tasks[1].id, tasks[0].id])
+          .catch((error: unknown) => error);
+        [, reorderResult] = await Promise.all([create, reorder]);
+      });
+    } finally {
+      await otherPool.end();
+    }
+    expect(reorderResult).toBeInstanceOf(OrderConflictError);
+    const stored = await createTasksRepository(pool).listTasks();
+    expect(stored.map((t) => [t.title, t.position])).toEqual([
+      ["א", 0],
+      ["ב", 1],
+      ["ג", 2],
+    ]);
+  });
+
+  it("refuses a reorder that runs right after a delete, and keeps positions contiguous", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }, { title: "ג" }]);
+    const otherPool = await connectedPool();
+    let reorderResult: unknown;
+    try {
+      await withListLockHeld(async () => {
+        const remove = createTasksRepository(otherPool).deleteTask(tasks[0].id);
+        await pause(200);
+        const reorder = createTasksRepository(pool)
+          .reorderTasks([tasks[2].id, tasks[1].id, tasks[0].id])
+          .catch((error: unknown) => error);
+        [, reorderResult] = await Promise.all([remove, reorder]);
+      });
+    } finally {
+      await otherPool.end();
+    }
+    expect(reorderResult).toBeInstanceOf(OrderConflictError);
+    const stored = await createTasksRepository(pool).listTasks();
+    expect(stored.map((t) => [t.title, t.position])).toEqual([
+      ["ב", 0],
+      ["ג", 1],
+    ]);
+  });
+
+  it("saves a status change while a reorder holds the list lock, and both are kept", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }]);
+    const otherPool = await connectedPool();
+    try {
+      await withListLockHeld(async () => {
+        const reorder = createTasksRepository(pool).reorderTasks([tasks[1].id, tasks[0].id]);
+        // The status change needs no list lock, so it finishes while the reorder still waits.
+        await createTasksRepository(otherPool).setTaskCompleted(tasks[0].id, true);
+        return reorder;
+      });
+    } finally {
+      await otherPool.end();
+    }
+    const stored = await createTasksRepository(pool).listTasks();
+    expect(stored.map((t) => [t.title, t.position, t.completed])).toEqual([
+      ["ב", 0, false],
+      ["א", 1, true],
+    ]);
   });
 });

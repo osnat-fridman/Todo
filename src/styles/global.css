@@ -68,6 +68,8 @@ p {
 
 .nav-link:focus-visible,
 .task-row-select:focus-visible,
+.task-checkbox:focus-visible,
+.drag-handle:focus-visible,
 .button:focus-visible,
 .icon-button:focus-visible {
   outline: 2px solid var(--color-primary);
@@ -203,6 +205,7 @@ p {
 }
 
 .task-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-1);
@@ -221,6 +224,13 @@ p {
 
 .task-row.is-selected {
   background: var(--color-selected);
+}
+
+/* The row being dragged lifts above the others. */
+.task-row.is-dragging {
+  z-index: 1;
+  background: var(--color-surface);
+  box-shadow: var(--shadow-soft);
 }
 
 .task-row-select {
@@ -254,18 +264,59 @@ p {
   height: 20px;
   margin: 0;
   accent-color: var(--color-primary);
+  cursor: pointer;
 }
 
-/* Read-only for now: keep it looking like a normal checkbox, not a greyed-out control. */
+/* Briefly disabled while its status is saved (ADR-9); keep it readable. */
 .task-checkbox:disabled {
-  opacity: 1;
-  cursor: default;
+  opacity: 0.6;
+  cursor: progress;
 }
 
+/* Dragging starts only here. On touch screens the handle never scrolls the page,
+   selects text or opens the browser's long-press menu (ADR-9). */
 .drag-handle {
   flex: none;
   display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  margin-inline-end: calc(var(--space-1) * -1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
   color: var(--color-text-secondary);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.drag-handle:hover:not([aria-disabled="true"]) {
+  color: var(--color-primary-dark);
+}
+
+.drag-handle[aria-disabled="true"] {
+  cursor: progress;
+}
+
+.task-row.is-dragging .drag-handle {
+  cursor: grabbing;
+}
+
+.list-notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-1) var(--space-2);
+}
+
+.list-notice p {
+  margin: 0;
 }
 
 .list-message {

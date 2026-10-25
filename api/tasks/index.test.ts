@@ -3,32 +3,12 @@ import type { VercelRequest, VercelResponse } from "@vercel/node";
 import { describe, expect, it, vi } from "vitest";
 import type { Task } from "../../shared/types.js";
 import { TaskLimitError, type TasksRepository } from "../../server/tasksRepository.js";
+import { fakeRepository, fakeResponse } from "../../test-support/apiHandlers.js";
 import { createHandler } from "./index.js";
-
-function fakeResponse() {
-  const res = {
-    statusCode: 0,
-    headers: {} as Record<string, string>,
-    body: undefined as unknown,
-    setHeader(name: string, value: string) {
-      res.headers[name.toLowerCase()] = value;
-      return res;
-    },
-    status(code: number) {
-      res.statusCode = code;
-      return res;
-    },
-    json(body: unknown) {
-      res.body = body;
-      return res;
-    },
-  };
-  return res;
-}
 
 function call(method: string, listTasks: () => Promise<Task[]>) {
   const res = fakeResponse();
-  const handler = createHandler(() => ({ listTasks, createTask: vi.fn(), updateTaskDetails: vi.fn(), deleteTask: vi.fn() }));
+  const handler = createHandler(() => fakeRepository({ listTasks }));
   return handler({ method } as VercelRequest, res as unknown as VercelResponse).then(() => res);
 }
 
@@ -41,7 +21,7 @@ function post(
   headers: Record<string, string> = { "content-type": "application/json" },
 ) {
   const res = fakeResponse();
-  const handler = createHandler(() => ({ listTasks: vi.fn(), createTask, updateTaskDetails: vi.fn(), deleteTask: vi.fn() }), () => NOW);
+  const handler = createHandler(() => fakeRepository({ createTask }), () => NOW);
   const req = { method: "POST", headers, body } as unknown as VercelRequest;
   return handler(req, res as unknown as VercelResponse).then(() => res);
 }

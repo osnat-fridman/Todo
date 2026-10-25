@@ -69,6 +69,11 @@ export function readJsonBody(
   return body as Record<string, unknown>;
 }
 
+/** Answers 404 for a task that does not exist (never did, or another visitor deleted it). */
+export function sendNotFound(res: VercelResponse): void {
+  sendError(res, 404, "TASK_NOT_FOUND", "המשימה כבר לא קיימת. ייתכן שנמחקה על ידי מבקר אחר.");
+}
+
 /** Answers a failed database operation with a temporary-failure error. */
 export function sendDatabaseError(res: VercelResponse, context: string, error: unknown): void {
   logDatabaseError(context, error);

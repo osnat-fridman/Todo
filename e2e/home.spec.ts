@@ -50,7 +50,7 @@ test.describe("home page", () => {
     const details = page.getByTestId("task-details");
     await expect(details).toContainText("בחר משימה מהרשימה כדי לצפות בפרטיה");
 
-    await page.getByRole("button", { name: "לקנות מצרכים" }).click();
+    await page.getByRole("button", { name: "לקנות מצרכים", exact: true }).click();
     await expect(details.getByLabel("כותרת")).toHaveValue("לקנות מצרכים");
     await expect(details.getByLabel("תיאור")).toHaveValue("חלב ולחם");
     await expect(details.getByLabel("תאריך יעד")).toHaveValue("2030-01-15");

@@ -7,6 +7,7 @@ import {
   sendError,
   sendJson,
   sendNoContent,
+  sendNotFound,
 } from "../../../server/http.js";
 import { isUuid, readTaskInput } from "../../../server/taskInput.js";
 import {
@@ -16,10 +17,6 @@ import {
   type TasksRepository,
 } from "../../../server/tasksRepository.js";
 import { PRODUCT_TIME_ZONE, todayInTimeZone } from "../../../shared/validation.js";
-
-function sendNotFound(res: VercelResponse): void {
-  sendError(res, 404, "TASK_NOT_FOUND", "המשימה כבר לא קיימת. ייתכן שנמחקה על ידי מבקר אחר.");
-}
 
 export function createHandler(getRepository: () => TasksRepository, now: () => Date = () => new Date()) {
   return async function handler(req: VercelRequest, res: VercelResponse): Promise<void> {

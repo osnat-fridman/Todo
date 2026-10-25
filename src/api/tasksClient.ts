@@ -5,6 +5,10 @@ export const SAVE_FAILED_MESSAGE = "השמירה נכשלה. נסה שוב.";
 export const DELETE_FAILED_MESSAGE = "המחיקה נכשלה. נסה שוב.";
 export const TOO_MANY_REQUESTS_MESSAGE = "יותר מדי בקשות. המתן מעט ונסה שוב.";
 export const TASK_GONE_MESSAGE = "המשימה כבר לא קיימת. ייתכן שנמחקה על ידי מבקר אחר.";
+export const STATUS_FAILED_MESSAGE = "שינוי הסטטוס נכשל. נסה שוב.";
+export const ORDER_FAILED_MESSAGE = "שמירת הסדר נכשלה, והסדר הקודם הוחזר.";
+export const ORDER_CONFLICT_MESSAGE = "הרשימה השתנתה בינתיים. רענן את הרשימה ונסה שוב.";
+export const LOAD_FAILED_MESSAGE = "לא ניתן לטעון את המשימות. רענן את הדף כדי לנסות שוב.";
 
 /** Loads the shared task list from the server. Throws on network or HTTP errors. */
 export async function fetchTasks(): Promise<Task[]> {
@@ -17,11 +21,13 @@ export async function fetchTasks(): Promise<Task[]> {
 
 type Failure =
   | { ok: false; notFound: true; field?: undefined; message: string }
+  | { ok: false; conflict: true; notFound?: false; field?: undefined; message: string }
   | { ok: false; notFound?: false; field: TaskField; message: string }
   | { ok: false; notFound?: false; field?: undefined; message: string };
 
 export type TaskResult = { ok: true; task: Task } | Failure;
 export type DeleteResult = { ok: true } | Failure;
+export type OrderResult = { ok: true; tasks: Task[] } | Failure;
 
 const TASK_FIELDS: readonly string[] = ["title", "description", "dueDate"];
 
@@ -37,10 +43,14 @@ function send(url: string, method: string, body?: unknown): Promise<Response | n
 async function toFailure(response: Response | null, fallback: string): Promise<Failure> {
   if (!response) return { ok: false, message: fallback };
   if (response.status === 404) return { ok: false, notFound: true, message: TASK_GONE_MESSAGE };
-  if (response.status === 409) return { ok: false, message: MESSAGES.taskLimitReached };
   if (response.status === 429) return { ok: false, message: TOO_MANY_REQUESTS_MESSAGE };
+  const body = (await response.json().catch(() => null)) as ApiError | null;
+  if (response.status === 409) {
+    // Two kinds of 409: a full list on create, or a stale list on reorder (ADR-9).
+    if (body?.error.code === "ORDER_CONFLICT") return { ok: false, conflict: true, message: ORDER_CONFLICT_MESSAGE };
+    return { ok: false, message: MESSAGES.taskLimitReached };
+  }
   if (response.status === 400) {
-    const body = (await response.json().catch(() => null)) as ApiError | null;
     const field = body?.error.field;
     if (field && TASK_FIELDS.includes(field)) {
       return { ok: false, field: field as TaskField, message: body.error.message };
@@ -68,4 +78,18 @@ export async function deleteTask(id: string): Promise<DeleteResult> {
   const response = await send(`/api/tasks/${encodeURIComponent(id)}`, "DELETE");
   if (response?.status === 204) return { ok: true };
   return toFailure(response, DELETE_FAILED_MESSAGE);
+}
+
+/** Saves a task's status as an explicit value. Never throws. */
+export async function setTaskCompleted(id: string, completed: boolean): Promise<TaskResult> {
+  const response = await send(`/api/tasks/${encodeURIComponent(id)}/status`, "PATCH", { completed });
+  if (response?.status === 200) return { ok: true, task: (await response.json()) as Task };
+  return toFailure(response, STATUS_FAILED_MESSAGE);
+}
+
+/** Saves the order of the whole list; the ids must be every task the page knows. Never throws. */
+export async function saveTaskOrder(orderedIds: string[]): Promise<OrderResult> {
+  const response = await send("/api/tasks/order", "PUT", { orderedIds });
+  if (response?.status === 200) return { ok: true, tasks: (await response.json()) as Task[] };
+  return toFailure(response, ORDER_FAILED_MESSAGE);
 }
