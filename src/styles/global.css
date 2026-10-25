@@ -147,6 +147,16 @@ p {
   background: var(--color-background);
 }
 
+.button-danger {
+  background: var(--color-surface);
+  border-color: var(--color-error-dark);
+  color: var(--color-error-dark);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--color-error-background);
+}
+
 .button:disabled {
   background: var(--color-input-background);
   border-color: var(--color-border);
@@ -294,6 +304,21 @@ p {
   padding: var(--space-3);
 }
 
+.details-notice {
+  margin: var(--space-3) var(--space-3) 0;
+}
+
+.details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+
+.card-title:focus {
+  outline: none;
+}
+
 .field {
   display: flex;
   flex-direction: column;
@@ -376,6 +401,10 @@ p {
   padding: var(--space-2) var(--space-3) 0;
 }
 
+.modal-small {
+  max-width: 400px;
+}
+
 .modal-title {
   font: var(--font-h3);
 }
@@ -448,6 +477,10 @@ p {
 
   .task-details-card {
     position: static;
+  }
+
+  .details-actions .button {
+    flex: 1;
   }
 
   .modal-header {

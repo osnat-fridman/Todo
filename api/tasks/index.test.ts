@@ -28,7 +28,7 @@ function fakeResponse() {
 
 function call(method: string, listTasks: () => Promise<Task[]>) {
   const res = fakeResponse();
-  const handler = createHandler(() => ({ listTasks, createTask: vi.fn() }));
+  const handler = createHandler(() => ({ listTasks, createTask: vi.fn(), updateTaskDetails: vi.fn(), deleteTask: vi.fn() }));
   return handler({ method } as VercelRequest, res as unknown as VercelResponse).then(() => res);
 }
 
@@ -41,7 +41,7 @@ function post(
   headers: Record<string, string> = { "content-type": "application/json" },
 ) {
   const res = fakeResponse();
-  const handler = createHandler(() => ({ listTasks: vi.fn(), createTask }), () => NOW);
+  const handler = createHandler(() => ({ listTasks: vi.fn(), createTask, updateTaskDetails: vi.fn(), deleteTask: vi.fn() }), () => NOW);
   const req = { method: "POST", headers, body } as unknown as VercelRequest;
   return handler(req, res as unknown as VercelResponse).then(() => res);
 }

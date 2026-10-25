@@ -1,34 +1,20 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import type { Task } from "../../shared/types";
-import {
-  localToday,
-  MESSAGES,
-  validateTaskInput,
-  type FieldError,
-  type TaskField,
-} from "../../shared/validation";
+import { localToday } from "../../shared/validation";
 import { createTask } from "../api/tasksClient";
 import { CloseIcon } from "./icons";
+import TaskFormFields, { validateDraft, type FieldErrors, type TaskDraft } from "./TaskFormFields";
+import { useModalBehavior } from "./useModalBehavior";
 
 type Props = {
   onClose: () => void;
   onCreated: (task: Task) => void;
 };
 
-type FieldErrors = Partial<Record<TaskField, string>>;
-
-function toFieldErrors(errors: FieldError[]): FieldErrors {
-  const result: FieldErrors = {};
-  for (const { field, message } of errors) result[field] ??= message;
-  return result;
-}
-
 // Rendered only while open, so every opening starts from the default values.
 export default function CreateTaskModal({ onClose, onCreated }: Props) {
   const [today] = useState(() => localToday());
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [dueDate, setDueDate] = useState(today);
+  const [draft, setDraft] = useState<TaskDraft>({ title: "", description: "", dueDate: today });
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -37,35 +23,20 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
   const savingRef = useRef(false);
   const id = useId();
 
-  useEffect(() => {
-    titleRef.current?.focus();
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = previousOverflow;
-    };
-  }, []);
+  useModalBehavior(onClose, saving);
 
   useEffect(() => {
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape" && !savingRef.current) onClose();
-    }
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+    titleRef.current?.focus();
+  }, []);
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (savingRef.current) return;
     setFormError(null);
 
-    const { value, errors: found } = validateTaskInput({ title, description, dueDate }, { today });
-    // A partly typed date reads as "" but is not a cleared field.
-    if (dueDateRef.current?.validity.badInput) {
-      found.push({ field: "dueDate", message: MESSAGES.dueDateInvalid });
-    }
-    setErrors(toFieldErrors(found));
-    if (found.length > 0) return;
+    const { value, errors: found } = validateDraft(draft, { today, dueDateInput: dueDateRef.current });
+    setErrors(found);
+    if (Object.keys(found).length > 0) return;
 
     savingRef.current = true;
     setSaving(true);
@@ -82,26 +53,6 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
     }
   }
 
-  // The "title or description" message sits under the title but marks both fields.
-  const bothMissing = errors.title === MESSAGES.titleOrDescription;
-  // Error text sits outside the <label> so it does not become part of the field's name.
-  const fieldProps = (field: TaskField, invalid = Boolean(errors[field])) => ({
-    id: `${id}-${field}`,
-    "aria-invalid": invalid,
-    "aria-describedby": errors[field]
-      ? `${id}-${field}-error`
-      : field === "description" && bothMissing
-        ? `${id}-title-error`
-        : undefined,
-    className: `input${field === "description" ? " textarea" : ""}${invalid ? " is-invalid" : ""}`,
-  });
-  const errorText = (field: TaskField) =>
-    errors[field] && (
-      <span id={`${id}-${field}-error`} className="field-error">
-        {errors[field]}
-      </span>
-    );
-
   return (
     <div className="modal-overlay">
       <div className="modal" role="dialog" aria-modal="true" aria-labelledby={`${id}-heading`}>
@@ -115,47 +66,16 @@ export default function CreateTaskModal({ onClose, onCreated }: Props) {
         </div>
 
         <form className="modal-form" onSubmit={handleSubmit} noValidate>
-          <div className="field">
-            <label htmlFor={`${id}-title`} className="field-label">
-              כותרת
-            </label>
-            <input
-              ref={titleRef}
-              type="text"
-              value={title}
-              placeholder="הזן כותרת (לא חובה)"
-              onChange={(e) => setTitle(e.target.value)}
-              {...fieldProps("title")}
-            />
-            {errorText("title")}
-          </div>
-          <div className="field">
-            <label htmlFor={`${id}-description`} className="field-label">
-              תיאור
-            </label>
-            <textarea
-              value={description}
-              placeholder="הזן תיאור (לא חובה)"
-              rows={4}
-              onChange={(e) => setDescription(e.target.value)}
-              {...fieldProps("description", Boolean(errors.description) || bothMissing)}
-            />
-            {errorText("description")}
-          </div>
-          <div className="field">
-            <label htmlFor={`${id}-dueDate`} className="field-label">
-              תאריך יעד
-            </label>
-            <input
-              ref={dueDateRef}
-              type="date"
-              value={dueDate}
-              min={today}
-              onChange={(e) => setDueDate(e.target.value)}
-              {...fieldProps("dueDate")}
-            />
-            {errorText("dueDate")}
-          </div>
+          <TaskFormFields
+            idPrefix={id}
+            draft={draft}
+            onChange={setDraft}
+            errors={errors}
+            today={today}
+            descriptionRows={4}
+            titleRef={titleRef}
+            dueDateRef={dueDateRef}
+          />
 
           {formError && (
             <p className="error-box form-error" role="alert">

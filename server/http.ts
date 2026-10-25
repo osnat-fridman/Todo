@@ -7,6 +7,11 @@ export function sendJson(res: VercelResponse, status: number, body: unknown): vo
   res.status(status).json(body);
 }
 
+export function sendNoContent(res: VercelResponse): void {
+  res.setHeader("Cache-Control", "no-store");
+  res.status(204).end();
+}
+
 export function sendError(
   res: VercelResponse,
   status: number,

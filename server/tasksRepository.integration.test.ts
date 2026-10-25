@@ -7,7 +7,15 @@ import {
   takeSnapshot,
   type SnapshotRow,
 } from "../test-support/devSnapshot.js";
-import { createTasksRepository, TaskLimitError } from "./tasksRepository.js";
+import {
+  createTasksRepository,
+  TaskLimitError,
+  TaskNotFoundError,
+  TaskValidationError,
+} from "./tasksRepository.js";
+
+const TODAY = "2026-10-25";
+const MISSING_ID = "00000000-0000-4000-8000-000000000000";
 
 describe("tasks repository (Dev)", () => {
   let pool: pg.Pool;
@@ -126,5 +134,105 @@ describe("tasks repository (Dev)", () => {
     }
     const positions = (await createTasksRepository(pool).listTasks()).map((t) => t.position);
     expect(positions).toEqual([0, 1, 2, 3]);
+  });
+
+  it("updates only the detail fields, not status or position", async () => {
+    const [task] = await replaceTasks(pool, [{ title: "לפני", description: "תיאור", completed: true, position: 3 }]);
+    const updated = await createTasksRepository(pool).updateTaskDetails(
+      task.id,
+      { title: "  אחרי ", description: "  ", dueDate: "2030-01-01" },
+      TODAY,
+    );
+    expect(updated).toEqual({ ...task, title: "אחרי", description: null, dueDate: "2030-01-01" });
+    expect((await createTasksRepository(pool).listTasks())[0]).toEqual(updated);
+  });
+
+  it("allows an unchanged past due date, and refuses changing it to another past date", async () => {
+    const [task] = await replaceTasks(pool, [{ title: "ישנה", dueDate: "2020-05-05" }]);
+    const repo = createTasksRepository(pool);
+    await expect(
+      repo.updateTaskDetails(task.id, { title: "עדיין ישנה", description: null, dueDate: "2020-05-05" }, TODAY),
+    ).resolves.toMatchObject({ title: "עדיין ישנה", dueDate: "2020-05-05" });
+    const error = await repo
+      .updateTaskDetails(task.id, { title: "x", description: null, dueDate: "2020-05-06" }, TODAY)
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TaskValidationError);
+    expect((error as TaskValidationError).errors).toEqual([{ field: "dueDate", message: "תאריך היעד לא יכול להיות בעבר" }]);
+    expect((await repo.listTasks())[0].title).toBe("עדיין ישנה");
+  });
+
+  it("answers not found when updating or deleting a task that does not exist", async () => {
+    await replaceTasks(pool, [{ title: "א" }]);
+    const repo = createTasksRepository(pool);
+    await expect(
+      repo.updateTaskDetails(MISSING_ID, { title: "x", description: null, dueDate: null }, TODAY),
+    ).rejects.toBeInstanceOf(TaskNotFoundError);
+    await expect(repo.deleteTask(MISSING_ID)).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it("lets the last of two parallel saves win, without touching status or position", async () => {
+    const [task] = await replaceTasks(pool, [{ title: "ב", completed: true }, { title: "א" }]);
+    const otherPool = createTestPool();
+    const lockPool = createTestPool();
+    const client = await lockPool.connect();
+    try {
+      // Hold the row lock so the first save waits, then let the second (later) save run after it.
+      await client.query("begin");
+      await client.query("select 1 from public.tasks where id = $1 for update", [task.id]);
+      const first = createTasksRepository(pool).updateTaskDetails(
+        task.id,
+        { title: "מבקר 1", description: null, dueDate: null },
+        TODAY,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      const second = createTasksRepository(otherPool).updateTaskDetails(
+        task.id,
+        { title: "מבקר 2", description: "אחרון", dueDate: null },
+        TODAY,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await client.query("commit");
+      await Promise.all([first, second]);
+    } finally {
+      client.release();
+      await otherPool.end();
+      await lockPool.end();
+    }
+    const stored = (await createTasksRepository(pool).listTasks()).find((t) => t.id === task.id);
+    expect(stored).toEqual({ ...task, title: "מבקר 2", description: "אחרון", dueDate: null });
+  });
+
+  it("deletes a task and renumbers positions without gaps", async () => {
+    const tasks = await replaceTasks(pool, [
+      { title: "א", position: 0 },
+      { title: "ב", position: 4 },
+      { title: "ג", position: 7 },
+      { title: "ד", position: 9 },
+    ]);
+    const repo = createTasksRepository(pool);
+    await repo.deleteTask(tasks[1].id);
+    const remaining = await repo.listTasks();
+    expect(remaining.map((t) => [t.title, t.position])).toEqual([
+      ["א", 0],
+      ["ג", 1],
+      ["ד", 2],
+    ]);
+    await expect(repo.deleteTask(tasks[1].id)).rejects.toBeInstanceOf(TaskNotFoundError);
+  });
+
+  it("keeps positions contiguous when a delete and a create run in parallel", async () => {
+    const tasks = await replaceTasks(pool, [{ title: "א" }, { title: "ב" }, { title: "ג" }]);
+    const otherPool = createTestPool();
+    try {
+      await Promise.all([
+        createTasksRepository(pool).deleteTask(tasks[0].id),
+        createTasksRepository(otherPool).createTask({ title: "ד", description: null, dueDate: null }),
+      ]);
+    } finally {
+      await otherPool.end();
+    }
+    const remaining = await createTasksRepository(pool).listTasks();
+    expect(remaining.map((t) => t.position)).toEqual([0, 1, 2]);
+    expect(remaining.map((t) => t.title)).toEqual(["ב", "ג", "ד"]);
   });
 });
