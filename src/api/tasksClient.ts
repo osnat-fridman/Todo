@@ -8,6 +8,7 @@ export const TASK_GONE_MESSAGE = "המשימה כבר לא קיימת. ייתכ�
 export const STATUS_FAILED_MESSAGE = "שינוי הסטטוס נכשל. נסה שוב.";
 export const ORDER_FAILED_MESSAGE = "שמירת הסדר נכשלה, והסדר הקודם הוחזר.";
 export const ORDER_CONFLICT_MESSAGE = "הרשימה השתנתה בינתיים. רענן את הרשימה ונסה שוב.";
+export const OFFLINE_ACTION_MESSAGE = "אין חיבור לאינטרנט. הפעולה לא בוצעה.";
 export const LOAD_FAILED_MESSAGE = "לא ניתן לטעון את המשימות. רענן את הדף כדי לנסות שוב.";
 
 /** Loads the shared task list from the server. Throws on network or HTTP errors. */
@@ -41,7 +42,8 @@ function send(url: string, method: string, body?: unknown): Promise<Response | n
 
 /** Turns a failed response into a field error or a general message. */
 async function toFailure(response: Response | null, fallback: string): Promise<Failure> {
-  if (!response) return { ok: false, message: fallback };
+  // The network failed: say so when the browser knows it is offline (ADR-18).
+  if (!response) return { ok: false, message: navigator.onLine ? fallback : OFFLINE_ACTION_MESSAGE };
   if (response.status === 404) return { ok: false, notFound: true, message: TASK_GONE_MESSAGE };
   if (response.status === 429) return { ok: false, message: TOO_MANY_REQUESTS_MESSAGE };
   const body = (await response.json().catch(() => null)) as ApiError | null;

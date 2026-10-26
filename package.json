@@ -15,6 +15,7 @@
     "test:e2e": "PLAYWRIGHT_BROWSERS_PATH=0 playwright test",
     "db:push": "node scripts/db-push.mjs",
     "db:seed": "node scripts/db-seed.mjs",
+    "icons": "PLAYWRIGHT_BROWSERS_PATH=0 node scripts/generate-icons.mjs",
     "postinstall": "node scripts/install-browser.mjs"
   },
   "dependencies": {

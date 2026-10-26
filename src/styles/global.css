@@ -34,6 +34,10 @@ p {
 /* ---------- Header & navigation ---------- */
 
 .site-header {
+  /* Keeps the menu clear of the notch when opened full screen on iPhone (viewport-fit=cover). */
+  padding-top: env(safe-area-inset-top);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   box-shadow: var(--shadow-soft);
@@ -48,7 +52,10 @@ p {
 }
 
 .nav-link {
-  padding: var(--space-1) var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--space-2);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
   font: var(--font-body-large);
@@ -68,12 +75,23 @@ p {
 
 .nav-link:focus-visible,
 .task-row-select:focus-visible,
-.task-checkbox:focus-visible,
 .drag-handle:focus-visible,
 .button:focus-visible,
 .icon-button:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+/* ---------- Offline notice ---------- */
+
+.offline-notice {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: var(--space-2) max(var(--space-3), env(safe-area-inset-right)) 0 max(var(--space-3), env(safe-area-inset-left));
+}
+
+.offline-notice .error-box {
+  margin: 0;
 }
 
 /* ---------- Page layout ---------- */
@@ -82,6 +100,10 @@ p {
   max-width: 1120px;
   margin: 0 auto;
   padding: var(--space-4) var(--space-3);
+  /* Side insets for landscape iPhones, and room above the home bar. */
+  padding-left: max(var(--space-3), env(safe-area-inset-left));
+  padding-right: max(var(--space-3), env(safe-area-inset-right));
+  padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom));
 }
 
 .page-heading {
@@ -208,14 +230,23 @@ p {
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 4px;
   min-height: 52px;
   padding: 0 var(--space-1);
   border-radius: var(--radius-sm);
 }
 
 .task-row + .task-row {
-  margin-top: 4px;
+  margin-top: 1px;
+}
+
+/* A thin divider between rows, as in the wireframes. */
+.task-row + .task-row::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  inset-inline: var(--space-1);
+  border-top: 1px solid var(--color-input-background);
 }
 
 .task-row:hover {
@@ -260,11 +291,24 @@ p {
 
 .task-checkbox {
   flex: none;
-  width: 20px;
-  height: 20px;
+  /* A 44px touch area around a 22px rounded box (DESIGN.md 2.3). */
+  width: 44px;
+  height: 44px;
   margin: 0;
-  accent-color: var(--color-primary);
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: var(--radius-sm);
+  background: no-repeat center / 22px 22px
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Crect x='1' y='1' width='20' height='20' rx='5' fill='%23fff' stroke='%239CA3AF' stroke-width='1.5'/%3E%3C/svg%3E");
   cursor: pointer;
+}
+
+.task-checkbox:checked {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 22 22'%3E%3Crect x='0.5' y='0.5' width='21' height='21' rx='5' fill='%232F80ED'/%3E%3Cpath d='M6 11.5l3.5 3.5L16 8' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+
+.task-checkbox:hover:not(:disabled) {
+  background-color: var(--color-background);
 }
 
 /* Briefly disabled while its status is saved (ADR-9); keep it readable. */
@@ -407,6 +451,11 @@ p {
   border-color: var(--color-error);
 }
 
+.task-checkbox:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -6px;
+}
+
 .input:focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 0;
@@ -430,7 +479,8 @@ p {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-2);
+  padding: max(var(--space-2), env(safe-area-inset-top)) max(var(--space-2), env(safe-area-inset-right))
+    max(var(--space-2), env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
   background: rgba(31, 41, 55, 0.5);
 }
 
@@ -498,8 +548,14 @@ p {
     padding: var(--space-1) var(--space-2);
   }
 
+  .offline-notice {
+    padding-left: max(var(--space-2), env(safe-area-inset-left));
+    padding-right: max(var(--space-2), env(safe-area-inset-right));
+  }
+
   .page {
-    padding: var(--space-3) var(--space-2);
+    padding: var(--space-3) max(var(--space-2), env(safe-area-inset-right))
+      calc(var(--space-3) + env(safe-area-inset-bottom)) max(var(--space-2), env(safe-area-inset-left));
   }
 
   h1 {

@@ -61,3 +61,4 @@
 - **הרצה (dev):** `npm start` (האתר וה-API יחד, בכתובת http://localhost:3000, מול פרויקט ה-Dev)
 - **בדיקות (test):** `npm test` (Unit); `npm run test:integration` ו-`npm run test:e2e` (מול Dev – לא בזמן שהאתר רץ לבדיקה ידנית); `npm run build`
 - **מסד נתונים (Dev בלבד):** `npm run db:push` (החלת Migrations), `npm run db:seed` (טעינה מחדש של נתוני הבדיקה)
+- **אייקוני PWA:** `npm run icons` (יצירה מחדש של קובצי ה-PNG מה-SVG שב-`public/icons/`)

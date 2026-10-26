@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -38,5 +38,27 @@ describe("navigation", () => {
   it("sends unknown paths to the home page", () => {
     renderAt("/no-such-page");
     expect(screen.getByRole("heading", { level: 1, name: "רשימת המשימות" })).toBeInTheDocument();
+  });
+});
+
+describe("offline notice", () => {
+  const OFFLINE_TEXT = "אין חיבור לאינטרנט. לא ניתן לצפות במשימות או לשנות אותן עד שהחיבור יחזור.";
+
+  it("appears on both pages while offline and disappears when the connection returns", async () => {
+    const onLine = vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
+    renderAt("/");
+    expect(screen.queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+
+    onLine.mockReturnValue(false);
+    act(() => window.dispatchEvent(new Event("offline")));
+    expect(screen.getByText(OFFLINE_TEXT)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("link", { name: "אודות" }));
+    expect(screen.getByText(OFFLINE_TEXT)).toBeInTheDocument();
+
+    onLine.mockReturnValue(true);
+    act(() => window.dispatchEvent(new Event("online")));
+    expect(screen.queryByText(OFFLINE_TEXT)).not.toBeInTheDocument();
+    onLine.mockRestore();
   });
 });
