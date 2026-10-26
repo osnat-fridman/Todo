@@ -70,12 +70,14 @@ describe("editing task details", () => {
     await userEvent.clear(field(details, "תאריך יעד"));
     await save(details);
 
-    await waitFor(() => expect(screen.getAllByTestId("task-row")[0]).toHaveTextContent("חדשה"));
+    // Without a due date the task moves to the end of the list (PRD FR-11) and stays selected.
+    await waitFor(() => expect(screen.getAllByTestId("task-row")[1]).toHaveTextContent("חדשה"));
+    expect(screen.getAllByTestId("task-row")[1]).toHaveClass("is-selected");
     expect(calls(fetchMock, "PATCH")[0][0]).toBe("/api/tasks/a");
     expect(patch.mock.calls[0][1]).toEqual({ title: "חדשה", description: "חלב", dueDate: null });
     expect(field(details, "כותרת")).toHaveValue("חדשה");
     // Status and position are not taken from the save response.
-    expect(screen.getAllByTestId("task-row")[0]).not.toHaveClass("is-completed");
+    expect(screen.getAllByTestId("task-row")[1]).not.toHaveClass("is-completed");
   });
 
   it("saves a task whose stored due date is past without changing the date", async () => {

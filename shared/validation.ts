@@ -15,6 +15,7 @@ export const MESSAGES = {
   dueDateInPast: "תאריך היעד לא יכול להיות בעבר",
   dueDateInvalid: "תאריך היעד אינו תקין",
   taskLimitReached: "הרשימה מלאה (1,000 משימות). כדי להוסיף משימה יש למחוק משימה קיימת.",
+  dragOutsideDateGroup: "אפשר להזיז משימה רק בין משימות עם אותו תאריך יעד.",
 } as const;
 
 export type TaskField = "title" | "description" | "dueDate";

@@ -2,11 +2,14 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import type { Task } from "../../shared/types";
 import { taskLabel } from "../lib/taskLabel";
+import { formatDueDate } from "../lib/taskOrder";
 import { DragHandleIcon } from "./icons";
 
 type Props = {
   task: Task;
   selected: boolean;
+  /** Open and due before today: a light red row with a "באיחור" label (PRD FR-11). */
+  overdue: boolean;
   /** True while this task's status is being saved; the checkbox waits for the answer (ADR-9). */
   statusPending: boolean;
   /** True while dragging is not allowed, e.g. while the previous order is still being saved. */
@@ -15,11 +18,17 @@ type Props = {
   onToggle: (id: string, completed: boolean) => void;
 };
 
-export default function TaskRow({ task, selected, statusPending, dragDisabled, onSelect, onToggle }: Props) {
+export default function TaskRow({ task, selected, overdue, statusPending, dragDisabled, onSelect, onToggle }: Props) {
   const label = taskLabel(task);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id, disabled: dragDisabled });
-  const classes = ["task-row", selected && "is-selected", task.completed && "is-completed", isDragging && "is-dragging"]
+  const classes = [
+    "task-row",
+    selected && "is-selected",
+    overdue && "is-overdue",
+    task.completed && "is-completed",
+    isDragging && "is-dragging",
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -38,6 +47,7 @@ export default function TaskRow({ task, selected, statusPending, dragDisabled, o
         onClick={() => onSelect(task.id)}
       >
         <span className="task-row-text">{label}</span>
+        {overdue && task.dueDate && <span className="task-row-overdue">באיחור: {formatDueDate(task.dueDate)}</span>}
       </button>
       <input
         type="checkbox"

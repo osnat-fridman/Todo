@@ -56,10 +56,11 @@ test.describe("edit task details", () => {
   test("a past saved date can be kept, but not changed to another past date", async ({ page, db }) => {
     await replaceTasks(db, [{ title: "ישנה", dueDate: "2020-05-05" }]);
     await page.goto("/");
-    const details = await select(page, "ישנה");
+    // An open task with a past date is overdue, so its row also says so (PRD FR-11).
+    const details = await select(page, "ישנה באיחור: 05/05/2020");
     await details.getByLabel("כותרת").fill("ישנה ומעודכנת");
     await details.getByRole("button", { name: "שמור שינויים" }).click();
-    await expect(page.getByTestId("task-row")).toHaveText(["ישנה ומעודכנת"]);
+    await expect(page.getByTestId("task-row")).toHaveText(["ישנה ומעודכנתבאיחור: 05/05/2020"]);
     await expect.poll(async () => (await storedTasks(db))[0]).toMatchObject({ title: "ישנה ומעודכנת", due_date: "2020-05-05" });
 
     await details.getByLabel("תאריך יעד").fill("2020-05-06");

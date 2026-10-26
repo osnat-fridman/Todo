@@ -266,6 +266,9 @@ p {
 
 .task-row-select {
   flex: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
   min-width: 0;
   min-height: 44px;
   padding: 0 var(--space-1);
@@ -279,9 +282,33 @@ p {
 
 .task-row-text {
   display: block;
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* An overdue task: the light red of the error boxes; the selection background still wins (DESIGN.md 1.1). */
+.task-row.is-overdue {
+  background: var(--color-error-background);
+}
+
+.task-row.is-overdue.is-selected {
+  background: var(--color-selected);
+}
+
+.task-row.is-overdue.is-dragging {
+  background: var(--color-surface);
+}
+
+/* The label never shrinks; the task text is cut with "..." instead. */
+.task-row-overdue {
+  flex: none;
+  margin-inline-start: auto;
+  white-space: nowrap;
+  color: var(--color-error-dark);
+  font: var(--font-body-medium);
 }
 
 .task-row.is-completed .task-row-text {

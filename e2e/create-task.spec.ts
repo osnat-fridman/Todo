@@ -53,7 +53,8 @@ test.describe("create task", () => {
     await expect(dialog).toBeHidden();
 
     const today = await browserToday(page);
-    await expect(page.getByTestId("task-row")).toHaveText(["קיימת", "רק כותרת", "רק תיאור בשתי שורות", "שניהם"]);
+    // Shown by due date (PRD FR-11); stored at the end of the manual order.
+    await expect(page.getByTestId("task-row")).toHaveText(["רק תיאור בשתי שורות", "שניהם", "קיימת", "רק כותרת"]);
     expect(await storedTasks(db)).toEqual([
       { title: "קיימת", description: null, due_date: null, completed: false, position: 0 },
       { title: "רק כותרת", description: null, due_date: null, completed: false, position: 1 },
@@ -119,13 +120,14 @@ test.describe("create task", () => {
 
     const rows = page.getByTestId("task-row");
     await expect(rows).toHaveCount(41);
-    await expect(rows.last()).toHaveText("המשימה החדשה");
-    await expect(rows.last()).toHaveClass(/is-selected/);
+    // The new task is due today, so it comes before the 40 tasks without a date (PRD FR-11).
+    await expect(rows.first()).toHaveText("המשימה החדשה");
+    await expect(rows.first()).toHaveClass(/is-selected/);
     const details = page.getByTestId("task-details");
     await expect(details.getByLabel("כותרת")).toHaveValue("המשימה החדשה");
     await expect(details).toBeInViewport();
     if (!isMobile) {
-      await expect(rows.last()).toBeInViewport();
+      await expect(rows.first()).toBeInViewport();
     }
   });
 

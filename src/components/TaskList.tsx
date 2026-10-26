@@ -12,6 +12,7 @@ import {
 import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import type { Task } from "../../shared/types";
 import { taskLabel } from "../lib/taskLabel";
+import { isOverdue } from "../lib/taskOrder";
 import TaskRow from "./TaskRow";
 
 export type LoadState =
@@ -23,7 +24,10 @@ export type LoadState =
 export type ListNotice = { message: string; canRefresh?: boolean };
 
 type Props = {
+  /** Tasks already in display order (PRD FR-11). */
   state: LoadState;
+  /** Today as YYYY-MM-DD in Israel time, to mark overdue tasks. */
+  today: string;
   selectedId: string | null;
   notice: ListNotice | null;
   pendingStatusIds: ReadonlySet<string>;
@@ -38,7 +42,7 @@ type Props = {
 
 const screenReaderInstructions = {
   draggable:
-    "כדי להזיז משימה, לחץ על רווח או Enter. השתמש בחיצים למעלה ולמטה כדי לבחור מיקום, ולחץ שוב על רווח או Enter כדי להניח אותה. Escape מבטל.",
+    "כדי להזיז משימה, לחץ על רווח או Enter. השתמש בחיצים למעלה ולמטה כדי לבחור מיקום, ולחץ שוב על רווח או Enter כדי להניח אותה. Escape מבטל. אפשר להזיז משימה רק בין משימות עם אותו תאריך יעד.",
 };
 
 function hebrewAnnouncements(tasks: Task[]): Announcements {
@@ -59,6 +63,7 @@ function hebrewAnnouncements(tasks: Task[]): Announcements {
 
 export default function TaskList({
   state,
+  today,
   selectedId,
   notice,
   pendingStatusIds,
@@ -128,6 +133,7 @@ export default function TaskList({
                   key={task.id}
                   task={task}
                   selected={task.id === selectedId}
+                  overdue={isOverdue(task, today)}
                   statusPending={pendingStatusIds.has(task.id)}
                   dragDisabled={ordering}
                   onSelect={onSelect}

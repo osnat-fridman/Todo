@@ -1,5 +1,5 @@
 import { arrayMove } from "@dnd-kit/sortable";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Task } from "../../shared/types";
 import { MESSAGES, TASK_LIMIT } from "../../shared/validation";
 import {
@@ -13,6 +13,7 @@ import CreateTaskModal from "../components/CreateTaskModal";
 import { PlusIcon } from "../components/icons";
 import TaskDetails from "../components/TaskDetails";
 import TaskList, { type ListNotice, type LoadState } from "../components/TaskList";
+import { orderGroup, productToday, sortTasks } from "../lib/taskOrder";
 
 const MOBILE_QUERY = "(max-width: 767px)";
 
@@ -132,16 +133,25 @@ export default function HomePage() {
     }
   }
 
-  /** Shows the new order at once and saves the whole list; on failure only the order goes back (ADR-9). */
+  /**
+   * Shows the new order at once and saves the whole list; on failure only the order goes back (ADR-9).
+   * A task can only move among tasks of its own date group (PRD FR-07, ADR-19).
+   */
   async function handleReorder(activeId: string, overId: string) {
     if (state.status !== "ready" || ordering) return;
-    const previousIds = state.tasks.map((task) => task.id);
-    const from = previousIds.indexOf(activeId);
-    const to = previousIds.indexOf(overId);
+    const shownIds = displayedTasks.map((task) => task.id);
+    const from = shownIds.indexOf(activeId);
+    const to = shownIds.indexOf(overId);
     if (from < 0 || to < 0) return;
-    const orderedIds = arrayMove(previousIds, from, to);
+    if (orderGroup(displayedTasks[from], today) !== orderGroup(displayedTasks[to], today)) {
+      setListNotice({ message: MESSAGES.dragOutsideDateGroup });
+      return;
+    }
+    const orderedIds = arrayMove(shownIds, from, to);
+    const previousPositions = new Map(state.tasks.map((task) => [task.id, task.position]));
+    const newPositions = new Map(orderedIds.map((id, index) => [id, index]));
 
-    updateTasks((tasks) => arrayMove(tasks, from, to));
+    updateTasks((tasks) => tasks.map((task) => ({ ...task, position: newPositions.get(task.id) ?? task.position })));
     setOrdering(true);
     const result = await saveTaskOrder(orderedIds);
     setOrdering(false);
@@ -152,12 +162,10 @@ export default function HomePage() {
       updateTasks((tasks) => tasks.map((task) => ({ ...task, position: positions.get(task.id) ?? task.position })));
       setListNotice(null);
     } else {
-      // Back to the previous order; tasks added meanwhile stay, at the end.
-      const rank = (id: string) => {
-        const index = previousIds.indexOf(id);
-        return index < 0 ? previousIds.length : index;
-      };
-      updateTasks((tasks) => [...tasks].sort((a, b) => rank(a.id) - rank(b.id)));
+      // Back to the previous order; tasks added meanwhile keep the position the server gave them.
+      updateTasks((tasks) =>
+        tasks.map((task) => ({ ...task, position: previousPositions.get(task.id) ?? task.position })),
+      );
       setListNotice({ message: result.message, canRefresh: "conflict" in result });
     }
   }
@@ -192,6 +200,12 @@ export default function HomePage() {
     closeModal();
   }
 
+  // "Today" is read on every render, so a date that passed shows up with the next change or a refresh (PRD FR-11).
+  const today = productToday();
+  const tasks = state.status === "ready" ? state.tasks : null;
+  const displayedTasks = useMemo(() => (tasks ? sortTasks(tasks, today) : []), [tasks, today]);
+  const listState: LoadState = state.status === "ready" ? { status: "ready", tasks: displayedTasks } : state;
+
   const selectedTask =
     state.status === "ready" ? (state.tasks.find((task) => task.id === selectedId) ?? null) : null;
   const listFull = state.status === "ready" && state.tasks.length >= TASK_LIMIT;
@@ -220,7 +234,8 @@ export default function HomePage() {
       </div>
       <div className="workspace">
         <TaskList
-          state={state}
+          state={listState}
+          today={today}
           selectedId={selectedId}
           notice={listNotice}
           pendingStatusIds={pendingStatusIds}

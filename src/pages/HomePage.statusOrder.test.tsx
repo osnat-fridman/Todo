@@ -10,6 +10,11 @@ const tasks: Task[] = [
   { id: "c", title: "לסיים דוח", description: null, dueDate: null, completed: true, position: 2 },
 ];
 
+/** The server's answer to a saved order: the tasks with their new positions. */
+function inOrder(...ordered: Task[]): Task[] {
+  return ordered.map((task, position) => ({ ...task, position }));
+}
+
 type Call = { url: string; method: string; body: unknown };
 type Reply = { status: number; body?: unknown } | "network-error" | Promise<{ status: number; body?: unknown }>;
 
@@ -168,7 +173,7 @@ describe("HomePage – order", () => {
   beforeEach(layOutRows);
 
   it("moves a task and saves every id in the new order", async () => {
-    const calls = mockServer(() => ({ status: 200, body: [tasks[1], tasks[0], tasks[2]] }));
+    const calls = mockServer(() => ({ status: 200, body: inOrder(tasks[1], tasks[0], tasks[2]) }));
     render(<HomePage />);
     await screen.findAllByTestId("task-row");
 
@@ -217,13 +222,13 @@ describe("HomePage – order", () => {
     await moveDown("לקנות מצרכים");
     await moveDown("לתכנן חופשה");
     expect(calls).toHaveLength(1);
-    await act(async () => answer({ status: 200, body: [tasks[1], tasks[0], tasks[2]] }));
+    await act(async () => answer({ status: 200, body: inOrder(tasks[1], tasks[0], tasks[2]) }));
     await moveDown("לקנות מצרכים");
     expect(calls).toHaveLength(2);
   });
 
   it("keeps the selection and an unsaved edit when the selected task is moved", async () => {
-    mockServer(() => ({ status: 200, body: [tasks[1], tasks[0], tasks[2]] }));
+    mockServer(() => ({ status: 200, body: inOrder(tasks[1], tasks[0], tasks[2]) }));
     render(<HomePage />);
     await userEvent.click(await screen.findByRole("button", { name: "לקנות מצרכים" }));
     const title = within(screen.getByTestId("task-details")).getByLabelText("כותרת");
@@ -233,5 +238,92 @@ describe("HomePage – order", () => {
     expect(rowTexts()).toEqual(["לתכנן חופשה", "לקנות מצרכים", "לסיים דוח"]);
     expect(within(screen.getByTestId("task-details")).getByLabelText("כותרת")).toHaveValue("לקנות מצרכים נוסף");
     expect(screen.getByRole("button", { name: "לקנות מצרכים" })).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
+describe("HomePage – due date order", () => {
+  beforeEach(layOutRows);
+
+  const dated: Task[] = [
+    { id: "n", title: "בלי תאריך", description: null, dueDate: null, completed: false, position: 0 },
+    { id: "f2", title: "עתידית שנייה", description: null, dueDate: "2099-01-01", completed: false, position: 1 },
+    { id: "o", title: "באיחור", description: null, dueDate: "2020-01-01", completed: false, position: 2 },
+    { id: "f1", title: "עתידית ראשונה", description: null, dueDate: "2099-01-01", completed: false, position: 3 },
+    { id: "d", title: "הושלמה בעבר", description: null, dueDate: "2020-01-01", completed: true, position: 4 },
+  ];
+
+  function rowTitles() {
+    return screen.getAllByTestId("task-row").map((row) => row.querySelector(".task-row-text")!.textContent);
+  }
+
+  it("shows overdue tasks first and marked, then by nearest date, then tasks without a date", async () => {
+    mockServer(() => ({ status: 200 }), () => dated);
+    render(<HomePage />);
+    await screen.findAllByTestId("task-row");
+
+    expect(rowTitles()).toEqual(["באיחור", "הושלמה בעבר", "עתידית שנייה", "עתידית ראשונה", "בלי תאריך"]);
+    const [overdue, completedPast] = screen.getAllByTestId("task-row");
+    expect(overdue).toHaveClass("is-overdue");
+    expect(overdue).toHaveTextContent("באיחור: 01/01/2020");
+    expect(completedPast).not.toHaveClass("is-overdue");
+    expect(completedPast.querySelector(".task-row-overdue")).toBeNull();
+  });
+
+  it("moves a task among tasks with the same date and saves the whole shown order", async () => {
+    const calls = mockServer(
+      () => ({ status: 200, body: inOrder(dated[2], dated[4], dated[3], dated[1], dated[0]) }),
+      () => dated,
+    );
+    render(<HomePage />);
+    await screen.findAllByTestId("task-row");
+
+    await moveDown("עתידית שנייה");
+    expect(rowTitles()).toEqual(["באיחור", "הושלמה בעבר", "עתידית ראשונה", "עתידית שנייה", "בלי תאריך"]);
+    expect(calls).toEqual([{ url: "/api/tasks/order", method: "PUT", body: { orderedIds: ["o", "d", "f1", "f2", "n"] } }]);
+  });
+
+  it("puts a task dropped on another date back, without saving, and says why", async () => {
+    const calls = mockServer(() => ({ status: 200 }), () => dated);
+    render(<HomePage />);
+    await screen.findAllByTestId("task-row");
+
+    await moveDown("עתידית ראשונה");
+    expect(await screen.findByText("אפשר להזיז משימה רק בין משימות עם אותו תאריך יעד.")).toBeInTheDocument();
+    expect(rowTitles()).toEqual(["באיחור", "הושלמה בעבר", "עתידית שנייה", "עתידית ראשונה", "בלי תאריך"]);
+    expect(calls).toEqual([]);
+  });
+
+  it("keeps an overdue task apart from a completed one with the same date", async () => {
+    const calls = mockServer(() => ({ status: 200 }), () => dated);
+    render(<HomePage />);
+    await screen.findAllByTestId("task-row");
+
+    await moveDown("באיחור");
+    expect(await screen.findByText("אפשר להזיז משימה רק בין משימות עם אותו תאריך יעד.")).toBeInTheDocument();
+    expect(calls).toEqual([]);
+  });
+
+  it("an overdue task that is completed is no longer marked, and comes back when reopened", async () => {
+    mockServer(({ body }) => ({ status: 200, body: { ...dated[2], ...(body as object) } }), () => dated);
+    render(<HomePage />);
+    await screen.findAllByTestId("task-row");
+
+    await userEvent.click(checkbox(/באיחור/));
+    expect(rowTitles()).toEqual(["באיחור", "הושלמה בעבר", "עתידית שנייה", "עתידית ראשונה", "בלי תאריך"]);
+    expect(screen.getAllByTestId("task-row")[0]).not.toHaveClass("is-overdue");
+
+    await userEvent.click(checkbox(/באיחור/));
+    expect(screen.getAllByTestId("task-row")[0]).toHaveClass("is-overdue");
+  });
+
+  it("a completed task from the past that is reopened becomes overdue and moves to the top", async () => {
+    mockServer(({ body }) => ({ status: 200, body: { ...dated[4], ...(body as object) } }), () => dated);
+    render(<HomePage />);
+    await screen.findAllByTestId("task-row");
+
+    await userEvent.click(checkbox(/באיחור/));
+    await userEvent.click(checkbox(/הושלמה בעבר/));
+    expect(rowTitles()).toEqual(["הושלמה בעבר", "באיחור", "עתידית שנייה", "עתידית ראשונה", "בלי תאריך"]);
+    expect(screen.getAllByTestId("task-row")[0]).toHaveClass("is-overdue");
   });
 });
